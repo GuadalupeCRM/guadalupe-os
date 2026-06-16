@@ -1,4 +1,4 @@
-name: Deploy to Netlify — Guadalupe OS
+name: Deploy to Netlify
 
 on:
   push:
@@ -6,28 +6,29 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: '20'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build
         run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: https://szcaggkwvtghgravfqrs.supabase.co
+          VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN6Y2FnZ2t3dnRnaGdyYXZmcXJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNDE0MjksImV4cCI6MjA5NTgxNzQyOX0.wNrjiQBaqQHCTdizbEz4gf1jLMSWZCAFIJXfxfGJe-g
 
-      - name: Deploy → guadalupefull.netlify.app
-        run: |
-          npm install -g netlify-cli
-          netlify deploy --dir=dist --prod \
-            --auth=${{ secrets.NETLIFY_AUTH_TOKEN }} \
-            --site=75988ec1-6ad5-4036-88a4-7e8b8fa276ac
+      - name: Deploy to Netlify
+        uses: nwtgck/actions-netlify@v3.0
+        with:
+          publish-dir: './dist'
+          production-deploy: true
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
