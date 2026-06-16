@@ -1,5 +1,12 @@
 # CLAUDE.md — Guadalupe OS
 
+## Deployment — READ BEFORE TOUCHING INFRA
+This project auto-deploys to https://guadalupe-os-app.netlify.app via GitHub Actions on every push to the main branch of github.com/GuadalupeCRM/guadalupe-os. That URL is the single source of truth for the user — never tell the user to run npm run dev, deploy to Vercel, or set up Netlify manually to "see the site." It's already live.
+
+Before creating any pg_cron job, ALWAYS run `SELECT jobname, schedule, command FROM cron.job;` first and check whether a job with the same target function and schedule already exists. Never create a duplicate.
+
+The Supabase database was wiped of all seed/test data on 2026-06-16. Do not regenerate fake leads, PDVs, events, cash entries, or any other fake business data again — ever. If a module needs sample data to render correctly during development, use empty-state UI instead of fabricated rows.
+
 ## What This Project Is
 Guadalupe OS is the complete business operating system for Guadalupe — Brazil's first RTD (ready-to-drink) tequila soda brand. 310ml cans, 7% ABV. Three SKUs: Mango Sour, Margarita Lime, Paloma Grapefruit. Target: urban women 25-35.
 
