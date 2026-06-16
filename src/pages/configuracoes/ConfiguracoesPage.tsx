@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { CheckCircle, XCircle, RefreshCw, ExternalLink, Zap, Instagram, FileText, Cloud } from 'lucide-react'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://szcaggkwvtghgravfqrs.supabase.co'
 const BLING_WH   = `${SUPABASE_URL}/functions/v1/bling-webhook`
 const IG_WH      = `${SUPABASE_URL}/functions/v1/instagram-sync`
 const DRIVE_WH   = `${SUPABASE_URL}/functions/v1/drive-webhook`
