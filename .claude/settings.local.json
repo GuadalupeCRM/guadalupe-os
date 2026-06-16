@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(curl -s http://localhost:5173/src/App.tsx)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(ls -la .env*)",
+      "Bash(cat .env)",
+      "Bash(cat vite.config.ts)",
+      "mcp__31394b8f-7d58-4d53-8626-777fa43d049f__get_publishable_keys",
+      "mcp__31394b8f-7d58-4d53-8626-777fa43d049f__list_tables",
+      "mcp__31394b8f-7d58-4d53-8626-777fa43d049f__apply_migration",
+      "Bash(npx tsc *)",
+      "mcp__31394b8f-7d58-4d53-8626-777fa43d049f__execute_sql",
+      "mcp__31394b8f-7d58-4d53-8626-777fa43d049f__deploy_edge_function",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
+    ]
+  }
+}
