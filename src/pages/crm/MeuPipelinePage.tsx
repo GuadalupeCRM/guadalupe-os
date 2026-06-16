@@ -19,11 +19,11 @@ export default function MeuPipelinePage() {
     queryFn: async () => {
       const { data } = await supabase
         .from('leads').select('*')
-        .eq('assigned_to', profile?.user_id)
+        .eq('assigned_to', profile?.id)
         .order('last_activity_at', { ascending: false })
       return data ?? []
     },
-    enabled: !!profile?.user_id,
+    enabled: !!profile?.id,
   })
 
   const total   = (leads ?? []).length

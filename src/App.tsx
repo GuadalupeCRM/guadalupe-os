@@ -21,7 +21,7 @@ const EstoquePage = lazy(() => import('./pages/estoque/EstoquePage'))
 const MarketingPage = lazy(() => import('./pages/marketing/MarketingPage'))
 const AfiliadasPage = lazy(() => import('./pages/afiliadas/AfiliadasPage'))
 const AdsPage = lazy(() => import('./pages/ads/AdsPage'))
-const B2cPage = lazy(() => import('./pages/b2c/B2cPage'))
+const B2cPage = lazy(() => import('./pages/b2c/B2CPage'))
 const RelatoriosPage = lazy(() => import('./pages/relatorios/RelatoriosPage'))
 const ConfiguracoesPage = lazy(() => import('./pages/configuracoes/ConfiguracoesPage'))
 
