@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast'
 import AuthGuard from './components/layout/AuthGuard'
 import AppLayout from './components/layout/AppLayout'
 import LoginPage from './pages/auth/LoginPage'
+import ResetPasswordPage from './pages/auth/ResetPasswordPage'
 import DashboardPage from './pages/dashboard/DashboardPage'
 
 const queryClient = new QueryClient({
@@ -46,6 +47,7 @@ export default function App() {
         />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/redefinir-senha" element={<ResetPasswordPage />} />
           <Route
             element={
               <AuthGuard>
