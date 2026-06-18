@@ -14,14 +14,24 @@ export interface ConnectionStatus {
   account?: string
 }
 
+const CONNECTION_STATUS_URL = `${(import.meta.env.VITE_SUPABASE_URL as string) || 'https://szcaggkwvtghgravfqrs.supabase.co'}/functions/v1/get-connection-status`
+
+async function fetchConnectionStatus(service: string): Promise<ConnectionStatus> {
+  try {
+    const res = await fetch(`${CONNECTION_STATUS_URL}?service=${service}`)
+    if (!res.ok) return { connected: false }
+    const data = await res.json()
+    return { connected: !!data.connected, account: data.account }
+  } catch {
+    return { connected: false }
+  }
+}
+
 export function useIGConnectionStatus() {
   return useQuery({
     queryKey: ['ig-connection-status'],
     staleTime: 5 * 60 * 1000,
-    queryFn: async (): Promise<ConnectionStatus> => {
-      // Placeholder — integração com Instagram Graph API na Fase 2
-      return { connected: false }
-    },
+    queryFn: () => fetchConnectionStatus('instagram'),
   })
 }
 
@@ -29,10 +39,7 @@ export function useSEOConnectionStatus() {
   return useQuery({
     queryKey: ['seo-connection-status'],
     staleTime: 5 * 60 * 1000,
-    queryFn: async (): Promise<ConnectionStatus> => {
-      // Placeholder — integração com Google Search Console na Fase 2
-      return { connected: false }
-    },
+    queryFn: () => fetchConnectionStatus('gsc'),
   })
 }
 
@@ -40,10 +47,7 @@ export function useBrevoConnectionStatus() {
   return useQuery({
     queryKey: ['brevo-connection-status'],
     staleTime: 5 * 60 * 1000,
-    queryFn: async (): Promise<ConnectionStatus> => {
-      // Placeholder — integração com Brevo na Fase 2
-      return { connected: false }
-    },
+    queryFn: () => fetchConnectionStatus('brevo'),
   })
 }
 
