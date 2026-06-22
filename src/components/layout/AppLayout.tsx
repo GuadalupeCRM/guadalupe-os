@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useUIStore } from '../../store/uiStore'
+import { useGlobalAlerts } from '../../hooks/useGlobalAlerts'
 import { ROLE_LABELS, ROLE_COLORS } from '../../constants/business'
 
 const NAV_ITEMS = [
@@ -27,6 +28,7 @@ export default function AppLayout() {
   const { profile, role, logout } = useAuth()
   const { sidebarOpen, setSidebarOpen } = useUIStore()
   const [mobileOpen, setMobileOpen] = useState(false)
+  useGlobalAlerts() // alertas realtime: caixa, insights, eventos
 
   const navItems = NAV_ITEMS.filter(item => role && item.roles.includes(role))
 

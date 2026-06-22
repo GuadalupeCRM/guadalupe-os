@@ -5,21 +5,7 @@
 [build.environment]
   NODE_VERSION = "20"
 
-# As variáveis VITE_ são injetadas pelo GitHub Actions via secrets
-# Se Netlify buildar direto (sem GitHub Actions), configurar em:
-# Site → Environment Variables no Netlify dashboard
-
 [[redirects]]
   from = "/*"
-  to   = "/index.html"
+  to = "/index.html"
   status = 200
-
-[[headers]]
-  for = "/fonts/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
-
-[[headers]]
-  for = "/assets/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
