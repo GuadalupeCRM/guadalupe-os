@@ -44,44 +44,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 }))
 
-// FIX: getSession imediato garante que isLoading resolve mesmo se
-// onAuthStateChange demorar ou não disparar no carregamento inicial
-async function initAuth() {
-  const { data: { session } } = await supabase.auth.getSession()
-  const store = useAuthStore.getState()
-  if (session?.user) {
-    store.setUser({ id: session.user.id, email: session.user.email || '' })
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, role, avatar_url')
-      .eq('user_id', session.user.id)
-      .single()
-    if (data) store.setProfile(data)
-  } else {
-    store.setUser(null)
-    store.setProfile(null)
+// Timeout de segurança — garante que isLoading resolve em no máximo 6s
+// independente de qualquer falha de rede ou demora do Supabase
+const safetyTimeout = setTimeout(() => {
+  if (useAuthStore.getState().isLoading) {
+    console.warn('[AuthStore] Timeout — forçando isLoading = false')
+    useAuthStore.setState({ isLoading: false })
   }
-  useAuthStore.setState({ isLoading: false })
-}
+}, 6000)
 
-initAuth()
-
-// Mantém onAuthStateChange para atualizações em tempo real (login/logout)
+// onAuthStateChange é a fonte principal de verdade
+// Supabase dispara INITIAL_SESSION quase imediatamente com o estado atual
 supabase.auth.onAuthStateChange(async (event, session) => {
-  // Ignora INITIAL_SESSION — já tratado pelo initAuth acima
-  if (event === 'INITIAL_SESSION') return
+  clearTimeout(safetyTimeout) // cancela o timeout assim que o Supabase responde
+
   const store = useAuthStore.getState()
+
   if (session?.user) {
     store.setUser({ id: session.user.id, email: session.user.email || '' })
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, role, avatar_url')
-      .eq('user_id', session.user.id)
-      .single()
-    if (data) store.setProfile(data)
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, role, avatar_url')
+        .eq('user_id', session.user.id)
+        .single()
+      if (data) store.setProfile(data)
+    } catch {
+      // profile query falhou — não bloqueia o login
+    }
   } else {
     store.setUser(null)
     store.setProfile(null)
   }
+
+  // Sempre resolve o loading, independente do resultado
   useAuthStore.setState({ isLoading: false })
 })
