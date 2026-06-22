@@ -25,16 +25,14 @@ const NAV_ITEMS = [
 ]
 
 export default function AppLayout() {
-  const { profile, role, isProfileLoading, logout } = useAuth()
+  const { profile, role, logout } = useAuth()
   const { sidebarOpen, setSidebarOpen } = useUIStore()
   const [mobileOpen, setMobileOpen] = useState(false)
   useGlobalAlerts() // alertas realtime: caixa, insights, eventos
 
   // Enquanto profile carrega, mostra todos os itens (evita sidebar vazio)
   // Após carregar, filtra por role normalmente
-  const navItems = isProfileLoading
-    ? NAV_ITEMS
-    : NAV_ITEMS.filter(item => role && item.roles.includes(role))
+  const navItems = NAV_ITEMS.filter(item => role && item.roles.includes(role))
 
   const initials = profile?.full_name
     ?.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase() || '?'
