@@ -1,18 +1,21 @@
-import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Navigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuthStore()
-  const navigate = useNavigate()
+  // Timeout local: se após 5s ainda isLoading, força saída do loading
+  // Isso garante que o componente nunca fica travado mesmo se o store falhar
+  const [forceReady, setForceReady] = useState(false)
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      navigate('/login')
-    }
-  }, [isAuthenticated, isLoading, navigate])
+    const t = setTimeout(() => setForceReady(true), 5000)
+    return () => clearTimeout(t)
+  }, [])
 
-  if (isLoading) {
+  const stillLoading = isLoading && !forceReady
+
+  if (stillLoading) {
     return (
       <div className="min-h-screen bg-areia flex items-center justify-center">
         <div className="text-center">
@@ -23,6 +26,9 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (!isAuthenticated) return null
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+
   return <>{children}</>
 }
