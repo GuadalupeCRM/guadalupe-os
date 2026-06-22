@@ -16,7 +16,7 @@ const MODULE_ACCESS: Record<string, string[]> = {
 }
 
 export function useAuth() {
-  const { user, profile, isLoading, isAuthenticated, logout } = useAuthStore()
+  const { user, profile, isLoading, isProfileLoading, isAuthenticated, logout } = useAuthStore()
   const role = profile?.role
 
   return {
@@ -32,6 +32,7 @@ export function useAuth() {
     isEventos: role === 'eventos' || role === 'admin',
     isFinanceiro: role === 'financeiro' || role === 'admin',
     isVendedor: role === 'vendedor',
+    isProfileLoading,
     canAccess: (module: string) => {
       if (!role) return false
       const allowed = MODULE_ACCESS[module] || []
