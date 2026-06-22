@@ -44,8 +44,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 }))
 
-// Init: subscribe to auth changes
+// FIX: getSession imediato garante que isLoading resolve mesmo se
+// onAuthStateChange demorar ou não disparar no carregamento inicial
+async function initAuth() {
+  const { data: { session } } = await supabase.auth.getSession()
+  const store = useAuthStore.getState()
+  if (session?.user) {
+    store.setUser({ id: session.user.id, email: session.user.email || '' })
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, role, avatar_url')
+      .eq('user_id', session.user.id)
+      .single()
+    if (data) store.setProfile(data)
+  } else {
+    store.setUser(null)
+    store.setProfile(null)
+  }
+  useAuthStore.setState({ isLoading: false })
+}
+
+initAuth()
+
+// Mantém onAuthStateChange para atualizações em tempo real (login/logout)
 supabase.auth.onAuthStateChange(async (event, session) => {
+  // Ignora INITIAL_SESSION — já tratado pelo initAuth acima
+  if (event === 'INITIAL_SESSION') return
   const store = useAuthStore.getState()
   if (session?.user) {
     store.setUser({ id: session.user.id, email: session.user.email || '' })
