@@ -46,12 +46,13 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 async function fetchProfile(userId: string) {
   try {
-    const { data } = await withTimeout(
-      supabase.from('profiles').select('id, full_name, role, avatar_url')
-        .eq('user_id', userId).maybeSingle(),
-      5000
-    )
-    return data
+    const query = (async () => {
+      const { data } = await supabase
+        .from('profiles').select('id, full_name, role, avatar_url')
+        .eq('user_id', userId).maybeSingle()
+      return data
+    })()
+    return await withTimeout(query, 5000)
   } catch {
     return null
   }
