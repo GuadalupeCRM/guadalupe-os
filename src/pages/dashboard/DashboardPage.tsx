@@ -50,6 +50,12 @@ export default function DashboardPage() {
           <KPICard label="Receita da Semana" value={data ? fmt(data.receitaSemana) : dash} color="verde" />
           <KPICard label="Leads Ativos" value={data ? String(data.leadsAtivos) : dash} />
           <KPICard label="Breakeven" value={breakevenStr} color={breakevenColor} />
+          {data && data.lataNecessarias > 0 && (
+            <div className="col-span-2 lg:col-span-4 bg-amarelo-pale border border-amarelo-mid rounded-xl px-5 py-3 flex items-center justify-between">
+              <span className="font-sans text-sm text-gray-700">Para fechar breakeven:</span>
+              <span className="font-sans font-semibold text-sm text-gray-900">{data.lataNecessarias} latas ({data.lataPorDia}/dia nos próximos {data.diasRestantes} dias)</span>
+            </div>
+          )}
         </div>
       )}
 

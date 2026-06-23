@@ -1,25 +1,35 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 
-// Custo fixo mensal confirmado (YM + operacional + estrutura)
 const CUSTO_FIXO = 11473.87
 
-// CMV de produção por SKU (lata saindo da Dádiva)
-const CMV: Record<string, number> = {
+// CMV de produção por SKU (Dádiva)
+const CMV_SKU: Record<string, number> = {
   mango_sour: 3.82,
   margarita_lime: 3.93,
   paloma_grapefruit: 4.02,
 }
+const CMV_DEFAULT = 3.86
+
+// Preço de venda por canal (conservador = on-trade)
+// MC = preço - CMV — essa é a margem de contribuição real por lata
+const PRECO_ONTRADE = 10.00
+const CMV_MEDIO = 3.86
+const MC_POR_LATA = PRECO_ONTRADE - CMV_MEDIO  // R$6,14 — pior caso (on-trade puro)
 
 function startOfMonth() {
   const d = new Date()
   return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0]
 }
-
 function sevenDaysAgo() {
   const d = new Date()
   d.setDate(d.getDate() - 7)
   return d.toISOString().split('T')[0]
+}
+function daysRemainingInMonth() {
+  const d = new Date()
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+  return lastDay - d.getDate()
 }
 
 export function useDashboard() {
@@ -29,7 +39,7 @@ export function useDashboard() {
       const mesAtual = startOfMonth()
       const semanaAtras = sevenDaysAgo()
 
-      const [caixaRes, receitaSemanaRes, receitaMesRes, inventarioMesRes,
+      const [caixaRes, receitaSemanaRes, inventarioMesRes,
              leadsRes, eventosRes, shopifyRes] = await Promise.all([
 
         supabase.from('cash_entries').select('type, value'),
@@ -37,10 +47,7 @@ export function useDashboard() {
         supabase.from('cash_entries').select('value')
           .eq('type', 'entrada').gte('date', semanaAtras),
 
-        supabase.from('cash_entries').select('value')
-          .eq('type', 'entrada').eq('category', 'vendas').gte('date', mesAtual),
-
-        // Unidades vendidas este mês (saídas do inventário)
+        // Unidades vendidas este mês por SKU
         supabase.from('inventory_movements').select('sku, units')
           .eq('type', 'saida').gte('date', mesAtual),
 
@@ -63,18 +70,30 @@ export function useDashboard() {
         (acc, r) => acc + Number(r.value), 0
       )
 
-      // MC = receita vendas - CMV produção das unidades registradas
-      // Nota: não inclui custos variáveis de canal (frete, staff evento) — esses ficam em cash_entries saídas
-      const receitaVendasMes = (receitaMesRes.data || []).reduce(
-        (acc, r) => acc + Number(r.value), 0
-      )
-      const cmvMes = (inventarioMesRes.data || []).reduce(
-        (acc, r) => acc + (CMV[r.sku] ?? 3.86) * Number(r.units), 0
-      )
-      const margemContribuicao = receitaVendasMes - cmvMes
+      // Breakeven por MC:
+      // MC gerada = Σ (unidades_vendidas × (preço - cmv_sku))
+      // Por enquanto usa preço on-trade como conservador — atualizar quando mix confirmado
+      const unidadesMes = (inventarioMesRes.data || [])
+      const totalUnidades = unidadesMes.reduce((acc, r) => acc + Number(r.units), 0)
+
+      const mcGerada = unidadesMes.reduce((acc, r) => {
+        const cmv = CMV_SKU[r.sku] ?? CMV_DEFAULT
+        const mc = PRECO_ONTRADE - cmv  // MC conservadora (on-trade)
+        return acc + mc * Number(r.units)
+      }, 0)
+
+      // % do breakeven atingida
       const breakevenPct = CUSTO_FIXO > 0
-        ? Math.min(999, Math.round((margemContribuicao / CUSTO_FIXO) * 100))
+        ? Math.round((mcGerada / CUSTO_FIXO) * 100)
         : 0
+
+      // Latas ainda necessárias para fechar breakeven
+      const mcFaltante = Math.max(0, CUSTO_FIXO - mcGerada)
+      const lataNecessarias = Math.ceil(mcFaltante / MC_POR_LATA)
+      const diasRestantes = daysRemainingInMonth()
+      const lataPorDia = diasRestantes > 0
+        ? Math.ceil(lataNecessarias / diasRestantes)
+        : lataNecessarias
 
       // Leads ativos
       const leadsAtivos = leadsRes.count ?? 0
@@ -97,20 +116,25 @@ export function useDashboard() {
       )
       const ugcsGerados = eventos.reduce((acc, e) => acc + Number(e.ugc_count || 0), 0)
 
-      // B2C
       const conversoesMes = shopifyRes.data?.length ?? 0
 
       return {
-        caixaAtual, receitaSemana, breakevenPct,
-        leadsAtivos, eventosMes, emExecucao,
-        receitaEventos, ugcsGerados, conversoesMes,
-        // debug
-        _receitaVendasMes: receitaVendasMes,
-        _cmvMes: cmvMes,
-        _margemContribuicao: margemContribuicao,
+        caixaAtual,
+        receitaSemana,
+        breakevenPct,
+        lataNecessarias,
+        lataPorDia,
+        totalUnidades,
+        diasRestantes,
+        leadsAtivos,
+        eventosMes,
+        emExecucao,
+        receitaEventos,
+        ugcsGerados,
+        conversoesMes,
       }
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
     retry: 1,
   })
 }
