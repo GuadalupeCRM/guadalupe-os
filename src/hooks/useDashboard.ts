@@ -1,7 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 
+// Custo fixo mensal confirmado (YM + operacional + estrutura)
 const CUSTO_FIXO = 11473.87
+
+// CMV de produção por SKU (lata saindo da Dádiva)
+const CMV: Record<string, number> = {
+  mango_sour: 3.82,
+  margarita_lime: 3.93,
+  paloma_grapefruit: 4.02,
+}
 
 function startOfMonth() {
   const d = new Date()
@@ -21,50 +29,33 @@ export function useDashboard() {
       const mesAtual = startOfMonth()
       const semanaAtras = sevenDaysAgo()
 
-      const [caixaRes, receitaSemanaRes, receitaMesRes, leadsRes, eventosRes, shopifyRes] =
-        await Promise.all([
-          // 1. Caixa atual
-          supabase
-            .from('cash_entries')
-            .select('type, value'),
+      const [caixaRes, receitaSemanaRes, receitaMesRes, inventarioMesRes,
+             leadsRes, eventosRes, shopifyRes] = await Promise.all([
 
-          // 2. Receita últimos 7 dias
-          supabase
-            .from('cash_entries')
-            .select('value')
-            .eq('type', 'entrada')
-            .gte('date', semanaAtras),
+        supabase.from('cash_entries').select('type, value'),
 
-          // 3. Receita mês atual (para breakeven)
-          supabase
-            .from('cash_entries')
-            .select('value')
-            .eq('type', 'entrada')
-            .gte('date', mesAtual),
+        supabase.from('cash_entries').select('value')
+          .eq('type', 'entrada').gte('date', semanaAtras),
 
-          // 4. Leads ativos (não perdidos)
-          supabase
-            .from('leads')
-            .select('id', { count: 'exact', head: true })
-            .not('stage', 'in', '("perdido","inativo","lost")'),
+        supabase.from('cash_entries').select('value')
+          .eq('type', 'entrada').eq('category', 'vendas').gte('date', mesAtual),
 
-          // 5. Eventos
-          supabase
-            .from('events')
-            .select('stage, actual_revenue, estimated_revenue, ugc_count, event_date'),
+        // Unidades vendidas este mês (saídas do inventário)
+        supabase.from('inventory_movements').select('sku, units')
+          .eq('type', 'saida').gte('date', mesAtual),
 
-          // 6. B2C / Shopify este mês
-          supabase
-            .from('shopify_orders')
-            .select('total_value')
-            .gt('total_value', 0)
-            .gte('order_date', mesAtual),
-        ])
+        supabase.from('leads').select('id', { count: 'exact', head: true })
+          .not('stage', 'in', '("perdido","inativo","lost")'),
+
+        supabase.from('events').select('stage, actual_revenue, estimated_revenue, ugc_count, event_date'),
+
+        supabase.from('shopify_orders').select('total_value')
+          .gt('total_value', 0).gte('order_date', mesAtual),
+      ])
 
       // Caixa atual
       const caixaAtual = (caixaRes.data || []).reduce(
-        (acc, r) => acc + (r.type === 'entrada' ? Number(r.value) : -Number(r.value)),
-        0
+        (acc, r) => acc + (r.type === 'entrada' ? Number(r.value) : -Number(r.value)), 0
       )
 
       // Receita semana
@@ -72,11 +63,18 @@ export function useDashboard() {
         (acc, r) => acc + Number(r.value), 0
       )
 
-      // Breakeven % do mês
-      const receitaMes = (receitaMesRes.data || []).reduce(
+      // MC = receita vendas - CMV produção das unidades registradas
+      // Nota: não inclui custos variáveis de canal (frete, staff evento) — esses ficam em cash_entries saídas
+      const receitaVendasMes = (receitaMesRes.data || []).reduce(
         (acc, r) => acc + Number(r.value), 0
       )
-      const breakevenPct = Math.round((receitaMes / CUSTO_FIXO) * 100)
+      const cmvMes = (inventarioMesRes.data || []).reduce(
+        (acc, r) => acc + (CMV[r.sku] ?? 3.86) * Number(r.units), 0
+      )
+      const margemContribuicao = receitaVendasMes - cmvMes
+      const breakevenPct = CUSTO_FIXO > 0
+        ? Math.min(999, Math.round((margemContribuicao / CUSTO_FIXO) * 100))
+        : 0
 
       // Leads ativos
       const leadsAtivos = leadsRes.count ?? 0
@@ -92,7 +90,7 @@ export function useDashboard() {
         return d >= mesInicio && d <= mesFim
       }).length
       const emExecucao = eventos.filter(e =>
-        e.stage === 'em_execucao' || e.stage === 'execucao' || e.stage === 'happening'
+        ['em_execucao', 'execucao', 'happening'].includes(e.stage)
       ).length
       const receitaEventos = eventos.reduce(
         (acc, e) => acc + Number(e.actual_revenue || e.estimated_revenue || 0), 0
@@ -103,15 +101,13 @@ export function useDashboard() {
       const conversoesMes = shopifyRes.data?.length ?? 0
 
       return {
-        caixaAtual,
-        receitaSemana,
-        breakevenPct,
-        leadsAtivos,
-        eventosMes,
-        emExecucao,
-        receitaEventos,
-        ugcsGerados,
-        conversoesMes,
+        caixaAtual, receitaSemana, breakevenPct,
+        leadsAtivos, eventosMes, emExecucao,
+        receitaEventos, ugcsGerados, conversoesMes,
+        // debug
+        _receitaVendasMes: receitaVendasMes,
+        _cmvMes: cmvMes,
+        _margemContribuicao: margemContribuicao,
       }
     },
     staleTime: 2 * 60 * 1000,
