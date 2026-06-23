@@ -10,6 +10,7 @@ const CMV_SKU: Record<string, number> = {
   paloma_grapefruit: 4.02,
 }
 const CMV_DEFAULT = 3.86
+const LATAS_POR_CAIXA = 12  // NFs e inventory_movements registram em CAIXAS
 
 // Preço de venda por canal (conservador = on-trade)
 // MC = preço - CMV — essa é a margem de contribuição real por lata
@@ -74,12 +75,15 @@ export function useDashboard() {
       // MC gerada = Σ (unidades_vendidas × (preço - cmv_sku))
       // Por enquanto usa preço on-trade como conservador — atualizar quando mix confirmado
       const unidadesMes = (inventarioMesRes.data || [])
-      const totalUnidades = unidadesMes.reduce((acc, r) => acc + Number(r.units), 0)
+      const totalCaixas = unidadesMes.reduce((acc, r) => acc + Number(r.units), 0)
+      const totalUnidades = totalCaixas * LATAS_POR_CAIXA  // total em latas
 
+      // ATENÇÃO: units em inventory_movements = CAIXAS (1 cx = 12 latas)
+      // NFs via Bling sempre emitidas por caixa — converter para latas no cálculo
       const mcGerada = unidadesMes.reduce((acc, r) => {
         const cmv = CMV_SKU[r.sku] ?? CMV_DEFAULT
         const mc = PRECO_ONTRADE - cmv  // MC conservadora (on-trade)
-        return acc + mc * Number(r.units)
+        return acc + mc * Number(r.units) * LATAS_POR_CAIXA
       }, 0)
 
       // % do breakeven atingida
@@ -125,6 +129,7 @@ export function useDashboard() {
         lataNecessarias,
         lataPorDia,
         totalUnidades,
+        totalCaixas,
         diasRestantes,
         leadsAtivos,
         eventosMes,
