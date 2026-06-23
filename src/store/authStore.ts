@@ -34,18 +34,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 }))
 
-async function fetchProfile(userId: string) {
-  const { data } = await supabase
-    .from('profiles').select('id, full_name, role, avatar_url')
-    .eq('user_id', userId).maybeSingle()
-  return data
+// Timeout helper — nenhuma chamada de rede fica pendente para sempre
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`timeout_${ms}ms`)), ms)
+    ),
+  ])
 }
 
-// BOOTSTRAP: getSession() garante que o JWT está aplicado ANTES de qualquer from()
-// Isso evita o deadlock onde onAuthStateChange faz from() enquanto o client ainda inicializa
+async function fetchProfile(userId: string) {
+  try {
+    const { data } = await withTimeout(
+      supabase.from('profiles').select('id, full_name, role, avatar_url')
+        .eq('user_id', userId).maybeSingle(),
+      5000
+    )
+    return data
+  } catch {
+    return null
+  }
+}
+
 async function bootstrap() {
   try {
-    const { data: { session } } = await supabase.auth.getSession()
+    // getSession() lê localStorage — rápido, mas protegemos com 3s
+    const result = await withTimeout(supabase.auth.getSession(), 3000)
+    const session = result.data.session
+
     if (session?.user) {
       useAuthStore.setState({
         user: { id: session.user.id, email: session.user.email || '' },
@@ -55,7 +72,9 @@ async function bootstrap() {
       if (profile) useAuthStore.getState().setProfile(profile)
     }
   } catch (e) {
-    console.error('[AuthStore] bootstrap error', e)
+    // Se getSession() travou ou falhou: limpa sessão corrompida e manda pro login
+    console.warn('[AuthStore] bootstrap falhou, limpando sessão:', e)
+    try { await supabase.auth.signOut() } catch {}
   } finally {
     useAuthStore.setState({ isLoading: false })
   }
@@ -63,7 +82,7 @@ async function bootstrap() {
 
 bootstrap()
 
-// Só escuta mudanças futuras (login/logout) — ignora INITIAL_SESSION (já tratado acima)
+// Escuta apenas login/logout futuros — INITIAL_SESSION já tratado acima
 supabase.auth.onAuthStateChange(async (event, session) => {
   if (event === 'INITIAL_SESSION') return
 
