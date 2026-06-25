@@ -288,7 +288,7 @@ export default function DashboardPage() {
   async function handleReadInsight(id: string) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    await supabase.rpc('mark_insight_read', { p_insight_id: id, p_user_id: user.id }).catch(() => null)
+    try { await supabase.rpc('mark_insight_read', { p_insight_id: id, p_user_id: user.id }) } catch { /* ignore */ }
     setInsights(prev => prev.map(i => i.id === id ? { ...i, read_by: [...(i.read_by ?? []), user.id] } : i))
   }
 
