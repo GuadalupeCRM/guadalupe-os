@@ -32,14 +32,14 @@ function DRERow({
 }) {
   return (
     <tr className={`border-b border-gray-50 last:border-0 ${bold ? 'bg-areia' : ''}`}>
-      <td className={`px-5 py-3 font-sans ${bold ? 'font-bold text-gray-900' : 'text-gray-600'}`}>{label}</td>
-      <td className={`px-5 py-3 text-right font-sans ${bold ? 'font-bold' : ''} ${valueColor(value)}`}>
+      <td className={`px-4 py-1.5 font-sans ${bold ? 'font-bold text-gray-900' : 'text-gray-600'}`}>{label}</td>
+      <td className={`px-4 py-1.5 text-right font-sans ${bold ? 'font-bold' : ''} ${valueColor(value)}`}>
         {formatCurrency(value)}
       </td>
-      <td className="px-5 py-3 text-right font-sans text-gray-400 text-sm">
+      <td className="px-4 py-1.5 text-right font-sans text-gray-400 text-sm">
         {pct !== undefined ? formatPercent(pct) : '—'}
       </td>
-      <td className="px-5 py-3">
+      <td className="px-4 py-1.5">
         <Sparkline data={history} dataKey={dataKey} />
       </td>
     </tr>
@@ -101,7 +101,7 @@ export default function DRETab() {
 
       {/* DRE Table */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+        <div className="px-4 py-1.5 border-b border-gray-100 flex items-center justify-between">
           <p className="font-sans font-semibold text-sm text-gray-700">DRE — {monthLabel(month)}</p>
           <p className="font-sans text-xs text-gray-400">Comparativo últimos 4 meses →</p>
         </div>
@@ -109,10 +109,10 @@ export default function DRETab() {
           <table className="w-full font-sans text-sm">
             <thead>
               <tr className="text-left text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                <th className="px-5 py-2.5">Linha</th>
-                <th className="px-5 py-2.5 text-right">Valor</th>
-                <th className="px-5 py-2.5 text-right">% Receita</th>
-                <th className="px-5 py-2.5">Tendência</th>
+                <th className="px-4 py-1.5">Linha</th>
+                <th className="px-4 py-1.5 text-right">Valor</th>
+                <th className="px-4 py-1.5 text-right">% Receita</th>
+                <th className="px-4 py-1.5">Tendência</th>
               </tr>
             </thead>
             <tbody>

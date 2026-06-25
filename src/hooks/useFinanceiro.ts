@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { BREAKEVEN_MONTHLY, FIXED_COSTS_MONTHLY } from '../constants/business'
+import { FIXED_COSTS_MONTHLY } from '../constants/business'
 import type {
   CashEntry, CashEntryCategory, CashEntryType, ChannelRevenue,
   CMVHistoryEntry, BlingNF, SKUType, CanaisType, AgentInsight,
@@ -156,16 +156,36 @@ export interface DREData {
   history: { month: string; label: string; lines: DRELines }[]
 }
 
-function computeDRE(rows: ChannelRevenue[], fixedCosts: number): DRELines {
-  const receitaBruta = rows.reduce((s, r) => s + Number(r.revenue), 0)
-  const cmvTotal = rows.reduce((s, r) => s + Number(r.cmv_total), 0)
+interface FnMcFromNfs {
+  total_latas: number
+  total_receita: number
+  total_cmv: number
+  mc_total: number
+  mc_por_lata: number
+  breakeven_pct: number
+  fixed_costs: number
+  latas_para_break: number
+  periodo_from: string
+  periodo_to: string
+}
+
+function monthBounds(monthKey: string): { from: string; to: string } {
+  const [y, m] = monthKey.split('-').map(Number)
+  const from = `${monthKey}-01`
+  const isCurrent = monthKey === currentMonthKey()
+  const lastDay = new Date(y, m, 0).toISOString().slice(0, 10)
+  const to = isCurrent ? new Date().toISOString().slice(0, 10) : lastDay
+  return { from, to }
+}
+
+function linesFromMc(mc: FnMcFromNfs): DRELines {
+  const receitaBruta = Number(mc.total_receita ?? 0)
+  const cmvTotal = Number(mc.total_cmv ?? 0)
   const lucroBruto = receitaBruta - cmvTotal
-  const custosCanal = rows.reduce(
-    (s, r) => s + Number(r.freight_cost) + Number(r.labor_cost) + Number(r.materials_cost) + Number(r.other_cost || 0),
-    0
-  )
-  const margemContribuicao = lucroBruto - custosCanal
-  const resultadoOperacional = margemContribuicao - fixedCosts
+  const custosCanal = 0 // não rastreado por fn_mc_from_nfs (sem granularidade de frete/mão de obra)
+  const margemContribuicao = Number(mc.mc_total ?? lucroBruto)
+  const custosFixos = Number(mc.fixed_costs ?? FIXED_COSTS_MONTHLY)
+  const resultadoOperacional = margemContribuicao - custosFixos
   const pct = (v: number) => (receitaBruta === 0 ? 0 : (v / receitaBruta) * 100)
   return {
     receitaBruta,
@@ -175,7 +195,7 @@ function computeDRE(rows: ChannelRevenue[], fixedCosts: number): DRELines {
     custosCanal,
     margemContribuicao,
     margemContribuicaoPct: pct(margemContribuicao),
-    custosFixos: fixedCosts,
+    custosFixos,
     resultadoOperacional,
     resultadoOperacionalPct: pct(resultadoOperacional),
   }
@@ -186,33 +206,26 @@ export function useDRE(month: string = currentMonthKey()) {
     queryKey: ['dre', month],
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<DREData> => {
-      // Need data for current month + 3 previous months
+      // Mês selecionado + 3 meses anteriores, cada um via fn_mc_from_nfs (dados reais das NFs)
       const months = [shiftMonth(month, -3), shiftMonth(month, -2), shiftMonth(month, -1), month]
-      const earliest = `${months[0]}-01`
-      const latestDate = new Date(Number(month.split('-')[0]), Number(month.split('-')[1]), 0)
-        .toISOString().slice(0, 10)
 
-      const [revenueRes, settingsRes] = await Promise.all([
-        supabase.from('channel_revenue').select('*').gte('week_start', earliest).lte('week_start', latestDate),
-        supabase.from('app_settings').select('*').eq('key', 'fixed_costs').maybeSingle(),
-      ])
-      if (revenueRes.error) throw revenueRes.error
-      const rows = (revenueRes.data ?? []) as ChannelRevenue[]
-      const fixedCosts = (settingsRes.data?.value as { value?: number })?.value ?? FIXED_COSTS_MONTHLY
+      const results = await Promise.all(
+        months.map(async (m) => {
+          const { from, to } = monthBounds(m)
+          const { data, error } = await supabase.rpc('fn_mc_from_nfs', { p_from: from, p_to: to })
+          if (error) throw error
+          return { month: m, label: monthLabel(m), lines: linesFromMc(data as FnMcFromNfs) }
+        })
+      )
 
-      const history = months.map((m) => {
-        const monthRows = rows.filter((r) => toMonthKey(r.week_start) === m)
-        return { month: m, label: monthLabel(m), lines: computeDRE(monthRows, fixedCosts) }
-      })
-
-      const current = history[history.length - 1].lines
+      const current = results[results.length - 1].lines
       const breakeven = {
-        target: BREAKEVEN_MONTHLY,
-        progressPct: Math.min((current.receitaBruta / BREAKEVEN_MONTHLY) * 100, 100),
-        diff: current.receitaBruta - BREAKEVEN_MONTHLY,
+        target: current.custosFixos,
+        progressPct: Math.min((current.margemContribuicao / current.custosFixos) * 100, 100),
+        diff: current.margemContribuicao - current.custosFixos,
       }
 
-      return { month, current, breakeven, history }
+      return { month, current, breakeven, history: results }
     },
   })
 }
@@ -234,25 +247,38 @@ export interface CMVData {
   allHistory: CMVHistoryEntry[]
 }
 
+interface CMVComponentRow {
+  sku: SKUType
+  value: number
+  updated_at: string
+}
+
 export function useCMVHistory() {
   return useQuery({
     queryKey: ['cmv-history'],
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<CMVData> => {
-      const { data, error } = await supabase
-        .from('cmv_history')
-        .select('*')
-        .order('month', { ascending: false })
-      if (error) throw error
-      const allHistory = (data ?? []) as CMVHistoryEntry[]
+      const [historyRes, componentsRes] = await Promise.all([
+        supabase.from('cmv_history').select('*').order('month', { ascending: false }),
+        supabase.from('cmv_components').select('sku, value, updated_at'),
+      ])
+      if (historyRes.error) throw historyRes.error
+      if (componentsRes.error) throw componentsRes.error
+      const allHistory = (historyRes.data ?? []) as CMVHistoryEntry[]
+      const components = (componentsRes.data ?? []) as CMVComponentRow[]
 
       const skus: SKUType[] = ['mango_sour', 'margarita_lime', 'paloma_grapefruit']
       const bySku = skus.map((sku) => {
         const history = allHistory.filter((h) => h.sku === sku)
-        const current = history[0]
-        const previous = history[1]
-        const pctChange = current && previous && previous.cmv_value !== 0
-          ? ((Number(current.cmv_value) - Number(previous.cmv_value)) / Number(previous.cmv_value)) * 100
+        const skuComponents = components.filter((c) => c.sku === sku)
+        // Fonte de verdade do CMV atual por lata: soma dos componentes (cmv_components)
+        const current = skuComponents.reduce((s, c) => s + Number(c.value), 0)
+        const lastUpdated = skuComponents
+          .reduce((latest, c) => (c.updated_at > latest ? c.updated_at : latest), skuComponents[0]?.updated_at ?? '')
+          .slice(0, 10)
+        const previous = history[0]
+        const pctChange = previous && Number(previous.cmv_value) !== 0
+          ? ((current - Number(previous.cmv_value)) / Number(previous.cmv_value)) * 100
           : null
         const chartData = [...history].slice(0, 6).reverse().map((h) => ({
           month: h.month,
@@ -261,8 +287,8 @@ export function useCMVHistory() {
         }))
         return {
           sku,
-          current: current ? Number(current.cmv_value) : 0,
-          lastUpdated: current?.month ?? '',
+          current,
+          lastUpdated,
           pctChange,
           history,
           chartData,
@@ -422,6 +448,28 @@ export interface ChannelMarginsData {
   totalRevenue: number
 }
 
+interface BlingNFItemRow {
+  codigo?: string
+  quantidade?: number
+  valor?: number
+}
+
+function matchSkuCmv(codigo: string, cmvBySku: Record<string, number>): number | null {
+  if (/^GDMS|^GUA-MS/.test(codigo)) return cmvBySku.mango_sour ?? null
+  if (/^GDML|^GUA-MAR/.test(codigo)) return cmvBySku.margarita_lime ?? null
+  if (/^GDPG|^GUA-PAL/.test(codigo)) return cmvBySku.paloma_grapefruit ?? null
+  if (/^GDMIX/.test(codigo)) {
+    const vals = [cmvBySku.mango_sour, cmvBySku.margarita_lime, cmvBySku.paloma_grapefruit].filter((v) => v != null)
+    return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null
+  }
+  return null
+}
+
+function latasForItem(codigo: string, quantidade: number): number {
+  const isPackOf6 = codigo.endsWith('006') || /GUA-.*06$/.test(codigo)
+  return quantidade * (isPackOf6 ? 6 : 12)
+}
+
 export function useChannelMargins(month: string = currentMonthKey()) {
   return useQuery({
     queryKey: ['channel-margins', month],
@@ -431,40 +479,65 @@ export function useChannelMargins(month: string = currentMonthKey()) {
       const latest = new Date(Number(month.split('-')[0]), Number(month.split('-')[1]), 0)
         .toISOString().slice(0, 10)
 
-      const [revenueRes, settingsRes] = await Promise.all([
+      const [nfsRes, costsRes, cmvRes, settingsRes] = await Promise.all([
+        supabase.from('bling_nfs').select('canal, valor, items, status')
+          .eq('tipo', 'saida').not('canal', 'is', null)
+          .gte('data', earliest).lte('data', latest),
         supabase.from('channel_revenue').select('*').gte('week_start', earliest).lte('week_start', latest),
+        supabase.from('cmv_components').select('sku, value'),
         supabase.from('app_settings').select('*').eq('key', 'fixed_costs').maybeSingle(),
       ])
-      if (revenueRes.error) throw revenueRes.error
-      const data = (revenueRes.data ?? []) as ChannelRevenue[]
+      if (nfsRes.error) throw nfsRes.error
+      if (costsRes.error) throw costsRes.error
+      if (cmvRes.error) throw cmvRes.error
       const fixedCosts = (settingsRes.data?.value as { value?: number })?.value ?? FIXED_COSTS_MONTHLY
 
-      const canalMap = new Map<string, ChannelRevenue[]>()
-      data.forEach((r) => {
-        const list = canalMap.get(r.canal) ?? []
-        list.push(r)
-        canalMap.set(r.canal, list)
+      const cmvBySku: Record<string, number> = {}
+      ;(cmvRes.data ?? []).forEach((c) => {
+        cmvBySku[c.sku] = (cmvBySku[c.sku] ?? 0) + Number(c.value)
       })
 
-      const totalRevenue = data.reduce((s, r) => s + Number(r.revenue), 0)
+      const costsByCanal = new Map<string, ChannelRevenue[]>()
+      ;(costsRes.data as ChannelRevenue[] ?? []).forEach((r) => {
+        const list = costsByCanal.get(r.canal) ?? []
+        list.push(r)
+        costsByCanal.set(r.canal, list)
+      })
 
-      const rows: ChannelMarginRow[] = Array.from(canalMap.entries()).map(([canal, list]) => {
-        const revenue = list.reduce((s, r) => s + Number(r.revenue), 0)
-        const cmv = list.reduce((s, r) => s + Number(r.cmv_total), 0)
-        const freight = list.reduce((s, r) => s + Number(r.freight_cost), 0)
-        const labor = list.reduce((s, r) => s + Number(r.labor_cost), 0)
-        const materials = list.reduce((s, r) => s + Number(r.materials_cost), 0)
-        const other = list.reduce((s, r) => s + Number(r.other_cost || 0), 0)
-        const unitsSold = list.reduce((s, r) => s + Number(r.units_sold), 0)
-        const netMargin = revenue - cmv - freight - labor - materials - other
-        const netMarginPct = revenue === 0 ? 0 : (netMargin / revenue) * 100
-        const revenueShare = totalRevenue === 0 ? 0 : revenue / totalRevenue
-        const marginPerUnit = unitsSold === 0 ? 0 : netMargin / unitsSold
+      const canalMap = new Map<string, { revenue: number; cmv: number; unitsSold: number }>()
+      for (const nf of nfsRes.data ?? []) {
+        if (nf.status === 'cancelada' || !nf.canal) continue
+        const agg = canalMap.get(nf.canal) ?? { revenue: 0, cmv: 0, unitsSold: 0 }
+        agg.revenue += Number(nf.valor)
+        for (const item of (nf.items ?? []) as BlingNFItemRow[]) {
+          const codigo = item.codigo ?? ''
+          if (!codigo || codigo.startsWith('Z')) continue
+          const cmvLata = matchSkuCmv(codigo, cmvBySku)
+          if (cmvLata == null) continue
+          const latas = latasForItem(codigo, Number(item.quantidade ?? 0))
+          agg.cmv += latas * cmvLata
+          agg.unitsSold += latas
+        }
+        canalMap.set(nf.canal, agg)
+      }
+
+      const totalRevenue = Array.from(canalMap.values()).reduce((s, a) => s + a.revenue, 0)
+
+      const rows: ChannelMarginRow[] = Array.from(canalMap.entries()).map(([canal, agg]) => {
+        const costRows = costsByCanal.get(canal) ?? []
+        const freight = costRows.reduce((s, r) => s + Number(r.freight_cost), 0)
+        const labor = costRows.reduce((s, r) => s + Number(r.labor_cost), 0)
+        const materials = costRows.reduce((s, r) => s + Number(r.materials_cost), 0)
+        const other = costRows.reduce((s, r) => s + Number(r.other_cost || 0), 0)
+        const netMargin = agg.revenue - agg.cmv - freight - labor - materials - other
+        const netMarginPct = agg.revenue === 0 ? 0 : (netMargin / agg.revenue) * 100
+        const revenueShare = totalRevenue === 0 ? 0 : agg.revenue / totalRevenue
+        const marginPerUnit = agg.unitsSold === 0 ? 0 : netMargin / agg.unitsSold
         const unitsToBreakeven = marginPerUnit > 0 ? (fixedCosts * revenueShare) / marginPerUnit : 0
         return {
           canal: canal as CanaisType,
-          revenue, cmv, freight, labor, materials, other,
-          netMargin, netMarginPct, unitsSold,
+          revenue: agg.revenue, cmv: agg.cmv, freight, labor, materials, other,
+          netMargin, netMarginPct, unitsSold: agg.unitsSold,
           unitsToBreakeven: Math.ceil(unitsToBreakeven),
         }
       }).sort((a, b) => b.revenue - a.revenue)

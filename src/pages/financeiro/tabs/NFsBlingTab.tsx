@@ -150,14 +150,14 @@ export default function NFsBlingTab() {
           <table className="w-full font-sans text-sm">
             <thead>
               <tr className="text-left text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                <th className="px-5 py-2.5">NF</th>
-                <th className="px-5 py-2.5">Cliente</th>
-                <th className="px-5 py-2.5">CNPJ</th>
-                <th className="px-5 py-2.5 text-right">Valor</th>
-                <th className="px-5 py-2.5">Canal</th>
-                <th className="px-5 py-2.5">Data</th>
-                <th className="px-5 py-2.5">Status</th>
-                <th className="px-5 py-2.5"></th>
+                <th className="px-4 py-1.5">NF</th>
+                <th className="px-4 py-1.5">Cliente</th>
+                <th className="px-4 py-1.5">CNPJ</th>
+                <th className="px-4 py-1.5 text-right">Valor</th>
+                <th className="px-4 py-1.5">Canal</th>
+                <th className="px-4 py-1.5">Data</th>
+                <th className="px-4 py-1.5">Status</th>
+                <th className="px-4 py-1.5"></th>
               </tr>
             </thead>
             <tbody>
@@ -172,11 +172,11 @@ export default function NFsBlingTab() {
                       onClick={() => setExpanded(isExpanded ? null : nf.id)}
                       className={`border-b border-gray-50 last:border-0 cursor-pointer hover:bg-areia/50 ${noCanal ? 'bg-amarelo-pale/50' : ''}`}
                     >
-                      <td className="px-5 py-2.5 text-gray-800 font-semibold">#{nf.nf_number}</td>
-                      <td className="px-5 py-2.5 text-gray-800">{nf.cliente}</td>
-                      <td className="px-5 py-2.5 text-gray-400">{nf.cnpj ?? '—'}</td>
-                      <td className="px-5 py-2.5 text-right font-semibold text-gray-900">{formatCurrency(Number(nf.valor))}</td>
-                      <td className="px-5 py-2.5">
+                      <td className="px-4 py-1.5 text-gray-800 font-semibold">#{nf.nf_number}</td>
+                      <td className="px-4 py-1.5 text-gray-800">{nf.cliente}</td>
+                      <td className="px-4 py-1.5 text-gray-400">{nf.cnpj ?? '—'}</td>
+                      <td className="px-4 py-1.5 text-right font-semibold text-gray-900">{formatCurrency(Number(nf.valor))}</td>
+                      <td className="px-4 py-1.5">
                         {noCanal ? (
                           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amarelo-pale text-yellow-700">
                             Aguardando classificação
@@ -187,13 +187,13 @@ export default function NFsBlingTab() {
                           </span>
                         )}
                       </td>
-                      <td className="px-5 py-2.5 text-gray-500">{formatDate(nf.data)}</td>
-                      <td className="px-5 py-2.5">
+                      <td className="px-4 py-1.5 text-gray-500">{formatDate(nf.data)}</td>
+                      <td className="px-4 py-1.5">
                         <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${STATUS_BADGE[nf.status] ?? 'bg-gray-100 text-gray-500'}`}>
                           {STATUS_LABELS[nf.status] ?? nf.status}
                         </span>
                       </td>
-                      <td className="px-5 py-2.5 text-gray-400">
+                      <td className="px-4 py-1.5 text-gray-400">
                         {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </td>
                     </tr>

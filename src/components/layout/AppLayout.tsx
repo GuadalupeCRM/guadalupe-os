@@ -9,6 +9,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useUIStore } from '../../store/uiStore'
 import { useGlobalAlerts } from '../../hooks/useGlobalAlerts'
 import { ROLE_LABELS, ROLE_COLORS } from '../../constants/business'
+import ErrorBoundary from './ErrorBoundary'
 
 const NAV_ITEMS = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin','comercial','marketing','eventos','financeiro','vendedor'] },
@@ -144,7 +145,9 @@ export default function AppLayout() {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto pt-14 lg:pt-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </main>
     </div>

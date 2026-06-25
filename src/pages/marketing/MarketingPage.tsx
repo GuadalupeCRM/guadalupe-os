@@ -1,14 +1,13 @@
 import { useState } from 'react'
-import { Instagram, Target, Search, Mail } from 'lucide-react'
+import { Instagram, Target, Mail } from 'lucide-react'
 import IGTab from './tabs/IGTab'
 import MetasTab from './tabs/MetasTab'
-import SEOTab from './tabs/SEOTab'
+// SEOTab oculta do menu (Shopify já cobre SEO) — componente mantido em ./tabs/SEOTab.tsx, ainda usado em /b2c
 import EmailTab from './tabs/EmailTab'
 
 const TABS = [
   { key: 'ig', label: 'Métricas IG', icon: Instagram },
   { key: 'metas', label: 'Metas do Mês', icon: Target },
-  { key: 'seo', label: 'SEO', icon: Search },
   { key: 'email', label: 'Email Marketing', icon: Mail },
 ] as const
 
@@ -41,7 +40,6 @@ export default function MarketingPage() {
 
       {tab === 'ig' && <IGTab />}
       {tab === 'metas' && <MetasTab />}
-      {tab === 'seo' && <SEOTab />}
       {tab === 'email' && <EmailTab />}
     </div>
   )

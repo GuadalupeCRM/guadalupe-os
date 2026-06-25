@@ -123,7 +123,7 @@ export default function ShopifyTab() {
                 <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">Nenhum pedido sincronizado ainda. Configure o webhook orders/paid no Shopify.</td></tr>
               ) : orders.map((o) => (
                 <tr key={o.id} className="border-b border-gray-50 last:border-0">
-                  <td className="px-5 py-2.5 text-gray-500">{formatDate(o.order_date.slice(0, 10))}</td>
+                  <td className="px-5 py-2.5 text-gray-500">{o.order_date ? formatDate(o.order_date.slice(0, 10)) : '—'}</td>
                   <td className="px-5 py-2.5 text-gray-800 font-semibold">{o.customer_name || o.customer_email || '—'}</td>
                   <td className="px-5 py-2.5 text-gray-600">
                     {(o.skus ?? []).map((s) => SKU_LABELS[s.sku] ?? s.sku).join(', ') || '—'}

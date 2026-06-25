@@ -311,6 +311,63 @@ export function useCreateSEOMetric() {
 // ============================================================
 // EMAIL MARKETING (Brevo)
 // ============================================================
+export interface BrevoCampaignSummary {
+  id: number
+  name: string
+  sentDate: string | null
+  openRate: number
+  clickRate: number
+}
+
+// Busca campanhas reais enviadas via Brevo. A api-key fica em app_settings (key = 'brevo_api_key').
+export function useBrevoCampaigns() {
+  return useQuery({
+    queryKey: ['brevo-campaigns'],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<BrevoCampaignSummary[]> => {
+      const { data: setting } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'brevo_api_key')
+        .maybeSingle()
+      const raw = setting?.value as string | { value?: string } | null
+      const apiKey = typeof raw === 'string' ? raw : raw?.value
+      if (!apiKey) return []
+
+      try {
+        const res = await fetch('https://api.brevo.com/v3/emailCampaigns?status=sent&limit=10', {
+          headers: { 'api-key': apiKey, Accept: 'application/json' },
+        })
+        if (!res.ok) return []
+        const json = await res.json()
+        const campaigns = (json.campaigns ?? []) as Array<{
+          id: number
+          name: string
+          sentDate?: string | null
+          scheduledAt?: string | null
+          statistics?: {
+            globalStats?: { openRate?: string; clickRate?: string }
+            campaignStats?: Array<{ openRate?: string; clickRate?: string }>
+          }
+        }>
+        return campaigns.map((c) => {
+          const global = c.statistics?.globalStats
+          const first = c.statistics?.campaignStats?.[0]
+          return {
+            id: c.id,
+            name: c.name,
+            sentDate: c.sentDate ?? c.scheduledAt ?? null,
+            openRate: parseFloat(global?.openRate ?? first?.openRate ?? '0') || 0,
+            clickRate: parseFloat(global?.clickRate ?? first?.clickRate ?? '0') || 0,
+          }
+        })
+      } catch {
+        return []
+      }
+    },
+  })
+}
+
 export function useEmailCampaigns() {
   return useQuery({
     queryKey: ['email-campaigns'],

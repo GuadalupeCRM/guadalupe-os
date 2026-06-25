@@ -7,21 +7,15 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { Mail, Plus, Bot, Users, UserPlus, UserMinus, Zap } from 'lucide-react'
 import Modal from '../../../components/ui/Modal'
 import {
-  TRIGGER_TYPE_OPTIONS, TRIGGER_TYPE_LABELS, SEGMENT_OPTIONS, CAMPAIGN_STATUS_LABELS,
+  TRIGGER_TYPE_OPTIONS, TRIGGER_TYPE_LABELS, SEGMENT_OPTIONS,
 } from '../constants'
 import {
-  useBrevoConnectionStatus, useEmailCampaigns, useCreateCampaign, useGenerateCampaignContent,
+  useBrevoConnectionStatus, useBrevoCampaigns, useCreateCampaign, useGenerateCampaignContent,
   useEmailAutomations, useSubscriberStats,
 } from '../../../hooks/useMarketing'
 import { monthLabel } from '../../../hooks/useFinanceiro'
 import { formatNumber, formatPercent, formatDate } from '../../../utils/formatters'
 import type { EmailCampaignStatus, EmailTriggerType, EmailSegment } from '../../../types'
-
-function statusBadge(status: EmailCampaignStatus): string {
-  if (status === 'enviada') return 'bg-verde-pale text-verde-vivid'
-  if (status === 'agendada') return 'bg-amarelo-pale text-amarelo-vivid'
-  return 'bg-gray-100 text-gray-500'
-}
 
 // ============================================================
 // KPI
@@ -206,7 +200,7 @@ function CampaignBuilderModal({ open, onClose }: { open: boolean; onClose: () =>
 // ============================================================
 export default function EmailTab() {
   const { data: connection } = useBrevoConnectionStatus()
-  const { data: campaigns, isLoading: loadingCampaigns } = useEmailCampaigns()
+  const { data: campaigns, isLoading: loadingCampaigns } = useBrevoCampaigns()
   const { data: automations, isLoading: loadingAutomations } = useEmailAutomations()
   const { data: subscriberStats, isLoading: loadingStats } = useSubscriberStats()
   const [showBuilder, setShowBuilder] = useState(false)
@@ -276,40 +270,30 @@ export default function EmailTab() {
         </ResponsiveContainer>
       </div>
 
-      {/* Campanhas */}
+      {/* Campanhas (Brevo) */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100">
-          <p className="font-serif text-lg text-gray-900">Campanhas</p>
+          <p className="font-serif text-lg text-gray-900">Campanhas enviadas (Brevo)</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full font-sans text-sm">
             <thead>
               <tr className="text-left text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                <th className="px-5 py-2.5">Nome</th>
-                <th className="px-5 py-2.5">Status</th>
-                <th className="px-5 py-2.5 text-right">Enviados</th>
-                <th className="px-5 py-2.5 text-right">Taxa de abertura</th>
-                <th className="px-5 py-2.5 text-right">Taxa de clique</th>
-                <th className="px-5 py-2.5">Data</th>
+                <th className="px-4 py-1.5">Nome</th>
+                <th className="px-4 py-1.5">Data de envio</th>
+                <th className="px-4 py-1.5 text-right">Taxa de abertura</th>
+                <th className="px-4 py-1.5 text-right">Taxa de clique</th>
               </tr>
             </thead>
             <tbody>
               {!campaigns || campaigns.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">Nenhuma campanha cadastrada.</td></tr>
+                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">Nenhuma campanha encontrada na Brevo — verifique a api-key em Configurações.</td></tr>
               ) : campaigns.map((c) => (
                 <tr key={c.id} className="border-b border-gray-50 last:border-0">
-                  <td className="px-5 py-2.5 text-gray-800 font-semibold">{c.name}</td>
-                  <td className="px-5 py-2.5">
-                    <span className={`font-sans text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${statusBadge(c.status)}`}>
-                      {CAMPAIGN_STATUS_LABELS[c.status]}
-                    </span>
-                  </td>
-                  <td className="px-5 py-2.5 text-right text-gray-700">{c.sent_count > 0 ? formatNumber(c.sent_count) : '—'}</td>
-                  <td className="px-5 py-2.5 text-right text-gray-700">{c.open_rate != null ? formatPercent(c.open_rate) : '—'}</td>
-                  <td className="px-5 py-2.5 text-right text-gray-700">{c.click_rate != null ? formatPercent(c.click_rate) : '—'}</td>
-                  <td className="px-5 py-2.5 text-gray-500">
-                    {c.sent_at ? formatDate(c.sent_at.slice(0, 10)) : c.scheduled_at ? formatDate(c.scheduled_at.slice(0, 10)) : '—'}
-                  </td>
+                  <td className="px-4 py-1.5 text-gray-800 font-semibold">{c.name}</td>
+                  <td className="px-4 py-1.5 text-gray-500">{c.sentDate ? formatDate(c.sentDate.slice(0, 10)) : '—'}</td>
+                  <td className="px-4 py-1.5 text-right font-bold text-gray-900">{formatPercent(c.openRate)}</td>
+                  <td className="px-4 py-1.5 text-right font-bold text-gray-900">{formatPercent(c.clickRate)}</td>
                 </tr>
               ))}
             </tbody>

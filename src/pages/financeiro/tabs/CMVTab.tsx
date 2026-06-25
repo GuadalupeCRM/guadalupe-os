@@ -137,7 +137,10 @@ export default function CMVTab() {
   }
 
   const { bySku, allHistory } = data
-  const skuInsights = (insights ?? []).filter((i) => i.insight_type === 'sugestao' || i.insight_type === 'alerta')
+  // Escopo apenas a insights de CMV — exclui alertas de canal e de outros agentes (mesmo agent_name 'bling-integration')
+  const skuInsights = (insights ?? []).filter(
+    (i) => i.action_url === '/estoque?tab=cmv' || i.title?.toLowerCase().includes('cmv')
+  )
 
   // Build chart data merged by month
   const monthsSet = new Set<string>()
@@ -211,12 +214,12 @@ export default function CMVTab() {
           <table className="w-full font-sans text-sm">
             <thead>
               <tr className="text-left text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                <th className="px-5 py-2.5">Mês</th>
-                <th className="px-5 py-2.5">SKU</th>
-                <th className="px-5 py-2.5 text-right">Valor</th>
-                <th className="px-5 py-2.5 text-right">Anterior</th>
-                <th className="px-5 py-2.5">Motivo</th>
-                <th className="px-5 py-2.5">NF Bling</th>
+                <th className="px-4 py-1.5">Mês</th>
+                <th className="px-4 py-1.5">SKU</th>
+                <th className="px-4 py-1.5 text-right">Valor</th>
+                <th className="px-4 py-1.5 text-right">Anterior</th>
+                <th className="px-4 py-1.5">Motivo</th>
+                <th className="px-4 py-1.5">NF Bling</th>
               </tr>
             </thead>
             <tbody>
@@ -224,12 +227,12 @@ export default function CMVTab() {
                 <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">Nenhum histórico de CMV.</td></tr>
               ) : allHistory.map((h) => (
                 <tr key={h.id} className="border-b border-gray-50 last:border-0">
-                  <td className="px-5 py-2.5 text-gray-500">{formatDate(h.month)}</td>
-                  <td className="px-5 py-2.5 text-gray-800">{SKU_LABELS[h.sku] ?? h.sku}</td>
-                  <td className="px-5 py-2.5 text-right font-semibold text-gray-900">{formatCurrency(Number(h.cmv_value))}</td>
-                  <td className="px-5 py-2.5 text-right text-gray-400">{h.previous_value != null ? formatCurrency(Number(h.previous_value)) : '—'}</td>
-                  <td className="px-5 py-2.5 text-gray-600">{REASON_LABELS[h.reason?.toLowerCase() ?? ''] ?? h.reason ?? '—'}</td>
-                  <td className="px-5 py-2.5 text-gray-400">{h.bling_nf_ref ?? '—'}</td>
+                  <td className="px-4 py-1.5 text-gray-500">{formatDate(h.month)}</td>
+                  <td className="px-4 py-1.5 text-gray-800">{SKU_LABELS[h.sku] ?? h.sku}</td>
+                  <td className="px-4 py-1.5 text-right font-semibold text-gray-900">{formatCurrency(Number(h.cmv_value))}</td>
+                  <td className="px-4 py-1.5 text-right text-gray-400">{h.previous_value != null ? formatCurrency(Number(h.previous_value)) : '—'}</td>
+                  <td className="px-4 py-1.5 text-gray-600">{REASON_LABELS[h.reason?.toLowerCase() ?? ''] ?? h.reason ?? '—'}</td>
+                  <td className="px-4 py-1.5 text-gray-400">{h.bling_nf_ref ?? '—'}</td>
                 </tr>
               ))}
             </tbody>

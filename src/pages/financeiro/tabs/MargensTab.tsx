@@ -162,16 +162,16 @@ export default function MargensTab() {
           <table className="w-full font-sans text-sm">
             <thead>
               <tr className="text-left text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                <th className="px-5 py-2.5">Canal</th>
-                <th className="px-5 py-2.5 text-right">Receita</th>
-                <th className="px-5 py-2.5 text-right">CMV</th>
-                <th className="px-5 py-2.5 text-right">Frete</th>
-                <th className="px-5 py-2.5 text-right">M. Obra</th>
-                <th className="px-5 py-2.5 text-right">Materiais</th>
-                <th className="px-5 py-2.5 text-right">Outros</th>
-                <th className="px-5 py-2.5 text-right">Margem Líquida</th>
-                <th className="px-5 py-2.5 text-right">Breakeven (un.)</th>
-                <th className="px-5 py-2.5"></th>
+                <th className="px-4 py-1.5">Canal</th>
+                <th className="px-4 py-1.5 text-right">Receita</th>
+                <th className="px-4 py-1.5 text-right">CMV</th>
+                <th className="px-4 py-1.5 text-right">Frete</th>
+                <th className="px-4 py-1.5 text-right">M. Obra</th>
+                <th className="px-4 py-1.5 text-right">Materiais</th>
+                <th className="px-4 py-1.5 text-right">Outros</th>
+                <th className="px-4 py-1.5 text-right">Margem Líquida</th>
+                <th className="px-4 py-1.5 text-right">Breakeven (un.)</th>
+                <th className="px-4 py-1.5"></th>
               </tr>
             </thead>
             <tbody>
@@ -179,18 +179,18 @@ export default function MargensTab() {
                 <tr><td colSpan={10} className="px-5 py-8 text-center text-gray-400">Sem dados de margem para o mês atual.</td></tr>
               ) : rows.map((r) => (
                 <tr key={r.canal} className={`border-b border-gray-50 last:border-0 ${r.netMargin < 0 ? 'bg-rosa-pale/40' : ''}`}>
-                  <td className="px-5 py-2.5 text-gray-800 font-semibold">{CHANNEL_LABELS[r.canal] ?? r.canal}</td>
-                  <td className="px-5 py-2.5 text-right text-gray-700">{formatCurrency(r.revenue)}</td>
-                  <td className="px-5 py-2.5 text-right text-gray-500">{formatCurrency(r.cmv)}</td>
-                  <td className="px-5 py-2.5 text-right text-gray-500">{formatCurrency(r.freight)}</td>
-                  <td className="px-5 py-2.5 text-right text-gray-500">{formatCurrency(r.labor)}</td>
-                  <td className="px-5 py-2.5 text-right text-gray-500">{formatCurrency(r.materials)}</td>
-                  <td className="px-5 py-2.5 text-right text-gray-500">{formatCurrency(r.other)}</td>
-                  <td className={`px-5 py-2.5 text-right font-semibold ${r.netMargin >= 0 ? 'text-verde-vivid' : 'text-rosa-vivid'}`}>
+                  <td className="px-4 py-1.5 text-gray-800 font-semibold">{CHANNEL_LABELS[r.canal] ?? r.canal}</td>
+                  <td className="px-4 py-1.5 text-right font-semibold text-gray-800">{formatCurrency(r.revenue)}</td>
+                  <td className="px-4 py-1.5 text-right text-gray-500">{formatCurrency(r.cmv)}</td>
+                  <td className="px-4 py-1.5 text-right text-gray-500">{formatCurrency(r.freight)}</td>
+                  <td className="px-4 py-1.5 text-right text-gray-500">{formatCurrency(r.labor)}</td>
+                  <td className="px-4 py-1.5 text-right text-gray-500">{formatCurrency(r.materials)}</td>
+                  <td className="px-4 py-1.5 text-right text-gray-500">{formatCurrency(r.other)}</td>
+                  <td className={`px-4 py-1.5 text-right font-semibold ${r.netMargin >= 0 ? 'text-verde-vivid' : 'text-rosa-vivid'}`}>
                     {formatCurrency(r.netMargin)} <span className="text-xs text-gray-400">({formatPercent(r.netMarginPct)})</span>
                   </td>
-                  <td className="px-5 py-2.5 text-right text-gray-500">{r.unitsToBreakeven > 0 ? formatNumber(r.unitsToBreakeven) : '—'}</td>
-                  <td className="px-5 py-2.5">
+                  <td className="px-4 py-1.5 text-right text-gray-500">{r.unitsToBreakeven > 0 ? formatNumber(r.unitsToBreakeven) : '—'}</td>
+                  <td className="px-4 py-1.5">
                     <button onClick={() => setEditRow(r)} className="text-gray-400 hover:text-verde-vivid">
                       <Pencil size={14} />
                     </button>
