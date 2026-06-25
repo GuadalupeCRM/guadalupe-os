@@ -214,18 +214,21 @@ export function useDRE(month: string = currentMonthKey()) {
           const { from, to } = monthBounds(m)
           const { data, error } = await supabase.rpc('fn_mc_from_nfs', { p_from: from, p_to: to })
           if (error) throw error
-          return { month: m, label: monthLabel(m), lines: linesFromMc(data as FnMcFromNfs) }
+          const mc = data as FnMcFromNfs
+          return { month: m, label: monthLabel(m), lines: linesFromMc(mc), mc }
         })
       )
 
-      const current = results[results.length - 1].lines
+      const last = results[results.length - 1]
+      const current = last.lines
       const breakeven = {
         target: current.custosFixos,
-        progressPct: Math.min((current.margemContribuicao / current.custosFixos) * 100, 100),
+        // breakeven_pct vem direto da RPC (mc_total / custo_fixo) — não recalcular a partir de receita_bruta
+        progressPct: Math.min(Number(last.mc.breakeven_pct ?? 0), 100),
         diff: current.margemContribuicao - current.custosFixos,
       }
 
-      return { month, current, breakeven, history: results }
+      return { month, current, breakeven, history: results.map(({ month: m, label, lines }) => ({ month: m, label, lines })) }
     },
   })
 }

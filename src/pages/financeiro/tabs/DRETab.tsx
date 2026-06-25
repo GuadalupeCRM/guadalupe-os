@@ -83,7 +83,7 @@ export default function DRETab() {
         <div className="flex items-center justify-between mb-2">
           <p className="font-sans font-semibold text-sm text-gray-700">Breakeven Mensal</p>
           <p className="font-sans text-sm text-gray-500">
-            {formatCurrency(current.receitaBruta)} / {formatCurrency(breakeven.target)}
+            MC {formatCurrency(current.margemContribuicao)} / Custo Fixo {formatCurrency(breakeven.target)} — {formatPercent(breakeven.progressPct)}
           </p>
         </div>
         <div className="w-full h-3 bg-white rounded-full overflow-hidden border border-gray-200">
