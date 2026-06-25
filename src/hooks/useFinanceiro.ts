@@ -482,6 +482,7 @@ export function useChannelMargins(month: string = currentMonthKey()) {
       const [nfsRes, costsRes, cmvRes, settingsRes] = await Promise.all([
         supabase.from('bling_nfs').select('canal, valor, items, status')
           .eq('tipo', 'saida').not('canal', 'is', null)
+          .not('canal', 'in', '("industrializacao")')
           .gte('data', earliest).lte('data', latest),
         supabase.from('channel_revenue').select('*').gte('week_start', earliest).lte('week_start', latest),
         supabase.from('cmv_components').select('sku, value'),
