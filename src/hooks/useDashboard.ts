@@ -1,145 +1,171 @@
-import { useQuery } from '@tanstack/react-query'
+// src/hooks/useDashboard.ts
+// Breakeven e MC lidos diretamente das NFs reais via fn_mc_from_nfs()
+// Não há preço hardcoded — cada NF tem seu valor próprio
+
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-const CUSTO_FIXO = 11473.87
-
-// CMV de produção por SKU (Dádiva)
-const CMV_SKU: Record<string, number> = {
-  mango_sour: 3.82,
-  margarita_lime: 3.93,
-  paloma_grapefruit: 4.02,
+export interface DashboardData {
+  // Financeiro
+  caixaAtual: number
+  receitaSemana: number
+  // MC real das NFs
+  totalLatas: number
+  totalReceita: number
+  mcTotal: number
+  mcPorLata: number
+  breakevenPct: number
+  fixedCosts: number
+  latasParaBreak: number
+  // Comercial
+  leadsAtivos: number
+  conversoesB2C: number
+  eventosMes: number
+  // Meta
+  periodoFrom: string
+  periodoTo: string
+  loading: boolean
+  error: string | null
+  refetch: () => void
 }
-const CMV_DEFAULT = 3.86
-const LATAS_POR_CAIXA = 12  // NFs e inventory_movements registram em CAIXAS
 
-// Preço de venda por canal (conservador = on-trade)
-// MC = preço - CMV — essa é a margem de contribuição real por lata
-const PRECO_ONTRADE = 10.00
-const CMV_MEDIO = 3.86
-const MC_POR_LATA = PRECO_ONTRADE - CMV_MEDIO  // R$6,14 — pior caso (on-trade puro)
-
-function startOfMonth() {
+function startOfMonth(): string {
   const d = new Date()
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0]
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
 }
-function sevenDaysAgo() {
+
+function today(): string {
+  return new Date().toISOString().split('T')[0]
+}
+
+function sevenDaysAgo(): string {
   const d = new Date()
   d.setDate(d.getDate() - 7)
   return d.toISOString().split('T')[0]
 }
-function daysRemainingInMonth() {
-  const d = new Date()
-  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-  return lastDay - d.getDate()
-}
 
-export function useDashboard() {
-  return useQuery({
-    queryKey: ['dashboard'],
-    queryFn: async () => {
-      const mesAtual = startOfMonth()
-      const semanaAtras = sevenDaysAgo()
+export function useDashboard(): DashboardData {
+  const [data, setData] = useState<Omit<DashboardData, 'refetch'>>({
+    caixaAtual: 0,
+    receitaSemana: 0,
+    totalLatas: 0,
+    totalReceita: 0,
+    mcTotal: 0,
+    mcPorLata: 0,
+    breakevenPct: 0,
+    fixedCosts: 11473.87,
+    latasParaBreak: 0,
+    leadsAtivos: 0,
+    conversoesB2C: 0,
+    eventosMes: 0,
+    periodoFrom: startOfMonth(),
+    periodoTo: today(),
+    loading: true,
+    error: null,
+  })
 
-      const [caixaRes, receitaSemanaRes, inventarioMesRes,
-             leadsRes, eventosRes, shopifyRes] = await Promise.all([
+  const fetchDashboard = async () => {
+    setData(prev => ({ ...prev, loading: true, error: null }))
 
-        supabase.from('cash_entries').select('type, value'),
+    try {
+      const [
+        mcResult,
+        caixaResult,
+        receitaSemanaResult,
+        leadsResult,
+        b2cResult,
+        eventosResult,
+      ] = await Promise.all([
+        // 1. MC e breakeven direto das NFs reais
+        supabase.rpc('fn_mc_from_nfs', {
+          p_from: startOfMonth(),
+          p_to: today(),
+        }),
 
-        supabase.from('cash_entries').select('value')
-          .eq('type', 'entrada').gte('date', semanaAtras),
+        // 2. Saldo de caixa (entradas - saídas)
+        supabase
+          .from('cash_entries')
+          .select('type, value'),
 
-        // Unidades vendidas este mês por SKU
-        supabase.from('inventory_movements').select('sku, units')
-          .eq('type', 'saida').gte('date', mesAtual),
+        // 3. Receita da semana (entradas últimos 7 dias)
+        supabase
+          .from('cash_entries')
+          .select('value')
+          .eq('type', 'entrada')
+          .gte('date', sevenDaysAgo()),
 
-        supabase.from('leads').select('id', { count: 'exact', head: true })
-          .not('stage', 'in', '("perdido","inativo","lost")'),
+        // 4. Leads ativos
+        supabase
+          .from('leads')
+          .select('id', { count: 'exact', head: true })
+          .not('stage', 'in', '("perdido","inativo")'),
 
-        supabase.from('events').select('stage, actual_revenue, estimated_revenue, ugc_count, event_date'),
+        // 5. Conversões B2C no mês
+        supabase
+          .from('shopify_orders')
+          .select('id', { count: 'exact', head: true })
+          .gte('order_date', startOfMonth()),
 
-        supabase.from('shopify_orders').select('total_value')
-          .gt('total_value', 0).gte('order_date', mesAtual),
+        // 6. Eventos do mês
+        supabase
+          .from('events')
+          .select('id', { count: 'exact', head: true })
+          .gte('event_date', startOfMonth()),
       ])
 
-      // Caixa atual
-      const caixaAtual = (caixaRes.data || []).reduce(
-        (acc, r) => acc + (r.type === 'entrada' ? Number(r.value) : -Number(r.value)), 0
-      )
+      // MC das NFs
+      const mc = mcResult.data as any
+      const totalLatas      = mc?.total_latas      ?? 0
+      const totalReceita    = mc?.total_receita     ?? 0
+      const mcTotal         = mc?.mc_total          ?? 0
+      const mcPorLata       = mc?.mc_por_lata       ?? 0
+      const breakevenPct    = mc?.breakeven_pct     ?? 0
+      const fixedCosts      = mc?.fixed_costs       ?? 11473.87
+      const latasParaBreak  = mc?.latas_para_break  ?? 0
+      const periodoFrom     = mc?.periodo_from      ?? startOfMonth()
+      const periodoTo       = mc?.periodo_to        ?? today()
 
-      // Receita semana
-      const receitaSemana = (receitaSemanaRes.data || []).reduce(
-        (acc, r) => acc + Number(r.value), 0
-      )
-
-      // Breakeven por MC:
-      // MC gerada = Σ (unidades_vendidas × (preço - cmv_sku))
-      // Por enquanto usa preço on-trade como conservador — atualizar quando mix confirmado
-      const unidadesMes = (inventarioMesRes.data || [])
-      const totalCaixas = unidadesMes.reduce((acc, r) => acc + Number(r.units), 0)
-      const totalUnidades = totalCaixas * LATAS_POR_CAIXA  // total em latas
-
-      // ATENÇÃO: units em inventory_movements = CAIXAS (1 cx = 12 latas)
-      // NFs via Bling sempre emitidas por caixa — converter para latas no cálculo
-      const mcGerada = unidadesMes.reduce((acc, r) => {
-        const cmv = CMV_SKU[r.sku] ?? CMV_DEFAULT
-        const mc = PRECO_ONTRADE - cmv  // MC conservadora (on-trade)
-        return acc + mc * Number(r.units) * LATAS_POR_CAIXA
+      // Saldo de caixa
+      const caixaAtual = (caixaResult.data ?? []).reduce((acc: number, row: any) => {
+        return row.type === 'entrada' ? acc + Number(row.value) : acc - Number(row.value)
       }, 0)
 
-      // % do breakeven atingida
-      const breakevenPct = CUSTO_FIXO > 0
-        ? Math.round((mcGerada / CUSTO_FIXO) * 100)
-        : 0
-
-      // Latas ainda necessárias para fechar breakeven
-      const mcFaltante = Math.max(0, CUSTO_FIXO - mcGerada)
-      const lataNecessarias = Math.ceil(mcFaltante / MC_POR_LATA)
-      const diasRestantes = daysRemainingInMonth()
-      const lataPorDia = diasRestantes > 0
-        ? Math.ceil(lataNecessarias / diasRestantes)
-        : lataNecessarias
-
-      // Leads ativos
-      const leadsAtivos = leadsRes.count ?? 0
-
-      // Eventos
-      const eventos = eventosRes.data || []
-      const hoje = new Date()
-      const mesInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
-      const mesFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)
-      const eventosMes = eventos.filter(e => {
-        if (!e.event_date) return false
-        const d = new Date(e.event_date)
-        return d >= mesInicio && d <= mesFim
-      }).length
-      const emExecucao = eventos.filter(e =>
-        ['em_execucao', 'execucao', 'happening'].includes(e.stage)
-      ).length
-      const receitaEventos = eventos.reduce(
-        (acc, e) => acc + Number(e.actual_revenue || e.estimated_revenue || 0), 0
+      // Receita da semana
+      const receitaSemana = (receitaSemanaResult.data ?? []).reduce(
+        (acc: number, row: any) => acc + Number(row.value),
+        0
       )
-      const ugcsGerados = eventos.reduce((acc, e) => acc + Number(e.ugc_count || 0), 0)
 
-      const conversoesMes = shopifyRes.data?.length ?? 0
-
-      return {
-        caixaAtual,
-        receitaSemana,
+      setData({
+        caixaAtual: Math.round(caixaAtual * 100) / 100,
+        receitaSemana: Math.round(receitaSemana * 100) / 100,
+        totalLatas,
+        totalReceita,
+        mcTotal,
+        mcPorLata,
         breakevenPct,
-        lataNecessarias,
-        lataPorDia,
-        totalUnidades,
-        totalCaixas,
-        diasRestantes,
-        leadsAtivos,
-        eventosMes,
-        emExecucao,
-        receitaEventos,
-        ugcsGerados,
-        conversoesMes,
-      }
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-  })
+        fixedCosts,
+        latasParaBreak,
+        leadsAtivos:    leadsResult.count   ?? 0,
+        conversoesB2C:  b2cResult.count     ?? 0,
+        eventosMes:     eventosResult.count ?? 0,
+        periodoFrom,
+        periodoTo,
+        loading: false,
+        error: null,
+      })
+    } catch (err: any) {
+      setData(prev => ({
+        ...prev,
+        loading: false,
+        error: err?.message ?? 'Erro ao carregar dashboard',
+      }))
+    }
+  }
+
+  useEffect(() => {
+    fetchDashboard()
+  }, [])
+
+  return { ...data, refetch: fetchDashboard }
 }
