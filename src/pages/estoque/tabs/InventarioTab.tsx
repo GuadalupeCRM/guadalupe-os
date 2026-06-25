@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Plus, ArrowDownCircle, ArrowUpCircle, Package, Wallet, RefreshCw } from 'lucide-react'
 import { SKU_LABELS } from '../../../constants/business'
 import { useInventory } from '../../../hooks/useEstoque'
-import { formatCurrency, formatNumber, formatDate } from '../../../utils/formatters'
+import { formatCurrency, formatNumber, formatDate, caixasFromLatas } from '../../../utils/formatters'
 import MovementForm from '../components/MovementForm'
 import type { SKUInventorySummary } from '../../../hooks/useEstoque'
 import type { SKUType, InventoryMovementType } from '../../../types'
@@ -17,13 +17,16 @@ function SkuCard({ summary, onMove }: { summary: SKUInventorySummary; onMove: (t
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col">
       <p className="font-serif text-xl text-gray-900">{SKU_LABELS[summary.sku]}</p>
-      <p className={`font-serif text-5xl mt-2 ${stockColor(summary)}`}>{formatNumber(summary.currentStock)}</p>
-      <p className="font-sans text-xs text-gray-400 mt-1">latas em estoque</p>
+      <p className={`font-serif text-5xl mt-2 ${stockColor(summary)}`}>{formatNumber(caixasFromLatas(summary.currentStock))}</p>
+      <p className="font-sans text-xs text-gray-400 mt-1">caixas em estoque</p>
+      <p className="font-sans text-xs text-gray-400">(= {formatNumber(summary.currentStock)} latas)</p>
 
       <div className="mt-4 space-y-1.5 font-sans text-sm">
         <div className="flex items-center justify-between">
           <span className="text-gray-400">Ponto de reposição</span>
-          <span className="font-semibold text-gray-700">{formatNumber(summary.reorderPoint)}</span>
+          <span className="font-semibold text-gray-700">
+            {formatNumber(caixasFromLatas(summary.reorderPoint))} cx ({formatNumber(summary.reorderPoint)} latas)
+          </span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-gray-400">CMV por lata</span>
@@ -86,8 +89,10 @@ export default function InventarioTab() {
             <Package size={18} className="text-verde-vivid" />
           </div>
           <div>
-            <p className="font-sans text-xs text-gray-400 uppercase tracking-wider font-semibold">Total de latas</p>
-            <p className="font-serif text-2xl text-gray-900">{formatNumber(data.totalCans)}</p>
+            <p className="font-sans text-xs text-gray-400 uppercase tracking-wider font-semibold">Total em estoque</p>
+            <p className="font-serif text-2xl text-gray-900">
+              {formatNumber(caixasFromLatas(data.totalCans))} cx / {formatNumber(data.totalCans)} latas
+            </p>
           </div>
         </div>
         <div className="bg-areia border border-gray-200 rounded-xl p-5 flex items-center gap-3">

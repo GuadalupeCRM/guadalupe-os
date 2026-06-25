@@ -35,6 +35,15 @@ export function calcBreakevenProgress(revenue: number): number {
   return Math.min((revenue / 24000) * 100, 100)
 }
 
+// inventory_movements.units está em LATAS — caixas é a unidade primária de exibição (1 caixa = 12 latas)
+export function caixasFromLatas(latas: number): number {
+  return Math.floor(latas / 12)
+}
+
+export function formatCaixasLatas(latas: number): string {
+  return `${formatNumber(caixasFromLatas(latas))} cx (${formatNumber(latas)} latas)`
+}
+
 export function calcCMV(sku: SKUType, units: number): number {
   return (CMV_BY_SKU[sku] || 3.95) * units
 }

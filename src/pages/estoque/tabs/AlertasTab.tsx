@@ -3,7 +3,7 @@ import toast from 'react-hot-toast'
 import { AlertTriangle, AlertCircle, Settings2 } from 'lucide-react'
 import { SKU_LABELS } from '../../../constants/business'
 import { useReorderSuggestions, useUpdateReorderPoint, SKUS } from '../../../hooks/useEstoque'
-import { formatCurrency, formatNumber } from '../../../utils/formatters'
+import { formatCurrency, formatNumber, formatCaixasLatas } from '../../../utils/formatters'
 import type { ReorderSuggestion } from '../../../hooks/useEstoque'
 
 function SuggestionTable({ rows, emptyMessage }: { rows: ReorderSuggestion[]; emptyMessage: string }) {
@@ -27,10 +27,10 @@ function SuggestionTable({ rows, emptyMessage }: { rows: ReorderSuggestion[]; em
           {rows.map((r) => (
             <tr key={r.sku} className="border-b border-gray-50 last:border-0">
               <td className="px-5 py-2.5 text-gray-800 font-semibold">{SKU_LABELS[r.sku]}</td>
-              <td className="px-5 py-2.5 text-right text-gray-700">{formatNumber(r.currentStock)}</td>
-              <td className="px-5 py-2.5 text-right text-gray-700">{formatNumber(r.reorderPoint)}</td>
-              <td className="px-5 py-2.5 text-right text-gray-700">{r.avgDailyConsumption.toFixed(1)}</td>
-              <td className="px-5 py-2.5 text-right font-bold text-gray-900">{formatNumber(r.suggestedUnits)}</td>
+              <td className="px-5 py-2.5 text-right text-gray-700">{formatCaixasLatas(r.currentStock)}</td>
+              <td className="px-5 py-2.5 text-right text-gray-700">{formatCaixasLatas(r.reorderPoint)}</td>
+              <td className="px-5 py-2.5 text-right text-gray-700">{r.avgDailyConsumption.toFixed(1)} latas</td>
+              <td className="px-5 py-2.5 text-right font-bold text-gray-900">{formatCaixasLatas(r.suggestedUnits)}</td>
               <td className="px-5 py-2.5 text-right font-bold text-gray-900">{formatCurrency(r.estimatedCost)}</td>
             </tr>
           ))}
@@ -63,6 +63,7 @@ function ReorderPointSettings({ rows }: { rows: ReorderSuggestion[] }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5">
       <h3 className="font-serif text-lg text-gray-900 mb-3 flex items-center gap-2"><Settings2 size={16} /> Pontos de Reposição</h3>
+      <p className="font-sans text-xs text-gray-400 mb-3">Valores em latas (1 caixa = 12 latas).</p>
       <div className="space-y-3">
         {SKUS.map((sku) => (
           <div key={sku} className="flex items-center justify-between gap-3">

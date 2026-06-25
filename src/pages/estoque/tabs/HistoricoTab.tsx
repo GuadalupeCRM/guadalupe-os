@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { SKU_LABELS } from '../../../constants/business'
 import { MOVEMENT_TYPE_LABELS } from '../constants'
 import { useInventoryMovements, SKUS } from '../../../hooks/useEstoque'
-import { formatNumber, formatDate } from '../../../utils/formatters'
+import { formatNumber, formatDate, caixasFromLatas } from '../../../utils/formatters'
 
 export default function HistoricoTab() {
   const [sku, setSku] = useState('')
@@ -71,7 +71,7 @@ export default function HistoricoTab() {
                   <th className="px-5 py-2.5">Data</th>
                   <th className="px-5 py-2.5">SKU</th>
                   <th className="px-5 py-2.5">Tipo</th>
-                  <th className="px-5 py-2.5 text-right">Unidades</th>
+                  <th className="px-5 py-2.5 text-right">Quantidade</th>
                   <th className="px-5 py-2.5 text-right">Total acumulado</th>
                   <th className="px-5 py-2.5">Notas</th>
                   <th className="px-5 py-2.5">NF Bling</th>
@@ -88,9 +88,11 @@ export default function HistoricoTab() {
                       </span>
                     </td>
                     <td className={`px-5 py-2.5 text-right font-semibold ${m.type === 'entrada' ? 'text-verde-vivid' : 'text-rosa-vivid'}`}>
-                      {m.type === 'entrada' ? '+' : '-'}{formatNumber(m.units)}
+                      {m.type === 'entrada' ? '+' : '-'}{formatNumber(m.units)} latas ({formatNumber(caixasFromLatas(m.units))} cx)
                     </td>
-                    <td className="px-5 py-2.5 text-right text-gray-700 font-semibold">{formatNumber(m.running_total)}</td>
+                    <td className="px-5 py-2.5 text-right text-gray-700 font-semibold">
+                      {formatNumber(m.running_total)} latas ({formatNumber(caixasFromLatas(m.running_total))} cx)
+                    </td>
                     <td className="px-5 py-2.5 text-gray-500">{m.notes ?? '—'}</td>
                     <td className="px-5 py-2.5 text-gray-400">{m.bling_nf_id ?? '—'}</td>
                   </tr>
