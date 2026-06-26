@@ -5,7 +5,8 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 )
 
-const SHEET_ID = '1SMDK5x-bWWu0_sRhgKKap7DJ1s5fujeXHV_GZPzLqqo'
+// Sheet ID padrão — pode ser sobrescrito via app_settings (key='google_spreadsheet_id')
+const DEFAULT_SHEET_ID = '1SMDK5x-bWWu0_sRhgKKap7DJ1s5fujeXHV_GZPzLqqo'
 const SHEET_TAB = '2025'
 
 // Mapeamento de colunas da aba 2025
@@ -30,84 +31,112 @@ const MONTHS_2025 = [
   { month: 6, year: 2026, col: 97 },  // JUNHO (CW=101=saldo)
 ]
 
+async function getAppSetting(key: string): Promise<string | null> {
+  const { data } = await supabase.from('app_settings').select('value').eq('key', key).maybeSingle()
+  if (!data?.value) return null
+  return typeof data.value === 'string' ? data.value : String(data.value)
+}
+
+// Troca o refresh_token por um access_token novo (eles expiram em ~1h, o refresh_token não expira).
+async function getAccessTokenFromRefreshToken(): Promise<string> {
+  const [refreshToken, clientId, clientSecret] = await Promise.all([
+    getAppSetting('google_refresh_token'),
+    getAppSetting('google_client_id'),
+    getAppSetting('google_client_secret'),
+  ])
+
+  if (!refreshToken || !clientId || !clientSecret) {
+    throw new Error('NOT_CONFIGURED')
+  }
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: clientId,
+      client_secret: clientSecret,
+    }).toString(),
+  })
+
+  const data = await res.json()
+  if (!res.ok) throw new Error(`Google token refresh failed: ${JSON.stringify(data)}`)
+  return data.access_token as string
+}
+
+interface DiaryRow {
+  date: string
+  type: 'entrada' | 'saida'
+  category: string
+  value: number
+  description: string
+}
+
 async function syncDriveToSupabase(accessToken: string) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${SHEET_TAB}!A1:EA50?majorDimension=COLUMNS`
+  const spreadsheetId = (await getAppSetting('google_spreadsheet_id')) ?? DEFAULT_SHEET_ID
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${SHEET_TAB}!A1:EA50?majorDimension=COLUMNS`
   const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } })
   if (!resp.ok) throw new Error(`Sheets API error: ${resp.status}`)
   const data = await resp.json()
   const cols: string[][] = data.values ?? []
 
-  const entries: any[] = []
-  const diarioRows: { date: string; value: number }[] = []
+  const rows: DiaryRow[] = []
   const today = new Date().toISOString().slice(0, 10)
 
   for (const { month, year, col } of MONTHS_2025) {
     const dayCol    = cols[col - 1] ?? []
-    const entCol    = cols[col]     ?? []
-    const outCol    = cols[col + 1] ?? []
+    const entCol    = cols[col]     ?? [] // Entrada (CT)
+    const outCol    = cols[col + 1] ?? [] // Saída (CU)
     const diarioCol = cols[col + 2] ?? [] // Diário (CV) — opcional: se a coluna não existir, fica []
-    const saldoCol  = cols[col + 3] ?? []
 
     for (let row = 2; row <= 33; row++) { // linhas 3-34 = índices 2-33
       const dayRaw = dayCol[row]
       const day = parseInt(dayRaw)
       if (!day || day < 1 || day > 31) continue
 
-      const date = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+      const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
       if (date > today) continue
 
-      const inflows  = parseFloat(entCol[row]   || '0') || 0
-      const outflows = parseFloat(outCol[row]   || '0') || 0
-      const saldo    = parseFloat(saldoCol[row] || '0') || 0
+      const inflows  = parseFloat(entCol[row]    || '0') || 0
+      const outflows = parseFloat(outCol[row]    || '0') || 0
       const diario   = parseFloat(diarioCol[row] || '0') || 0
 
-      if (inflows > 0 || outflows > 0) {
-        const ob = Math.round((saldo - inflows + outflows) * 100) / 100
-        entries.push({ date, opening_balance: ob, inflows, outflows, source: 'drive_2025' })
+      if (inflows > 0) {
+        rows.push({ date, type: 'entrada', category: 'vendas', value: inflows, description: `Entrada — ${date}` })
       }
-
+      if (outflows > 0) {
+        rows.push({ date, type: 'saida', category: 'custos', value: outflows, description: `Saída — ${date}` })
+      }
       if (diario > 0) {
-        diarioRows.push({ date, value: diario })
+        rows.push({ date, type: 'saida', category: 'diario', value: diario, description: `Diário — ${date}` })
       }
     }
   }
 
-  if (entries.length) {
-    const { error } = await supabase.from('cash_flow').upsert(entries, { onConflict: 'date' })
-    if (error) throw error
-  }
-
-  const diarioSynced = await syncDiarioEntries(diarioRows)
-
-  return {
-    synced: entries.length,
-    last_date: entries[entries.length - 1]?.date,
-    diario_synced: diarioSynced,
-  }
+  const synced = await syncCashEntries(rows)
+  return { synced, total_rows: rows.length, last_date: rows[rows.length - 1]?.date }
 }
 
-// Lança a coluna Diário (CV) como saída de caixa categoria 'diario', com a mesma
-// regra de deduplicação: não duplica se já existe entry com mesma date + description.
-async function syncDiarioEntries(rows: { date: string; value: number }[]): Promise<number> {
+// Insere em cash_entries; não duplica se já existe entry com mesma date + description.
+async function syncCashEntries(rows: DiaryRow[]): Promise<number> {
   let synced = 0
-  for (const { date, value } of rows) {
-    const description = `Diário — ${date}`
-
+  for (const row of rows) {
     const { data: existing } = await supabase
       .from('cash_entries')
       .select('id')
-      .eq('date', date)
-      .eq('description', description)
+      .eq('date', row.date)
+      .eq('description', row.description)
       .maybeSingle()
 
     if (existing) continue
 
     const { error } = await supabase.from('cash_entries').insert({
-      date,
-      type: 'saida',
-      category: 'diario',
-      value,
-      description,
+      date: row.date,
+      type: row.type,
+      category: row.category,
+      value: row.value,
+      description: row.description,
     })
     if (error) throw error
     synced++
@@ -120,26 +149,18 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors })
 
   try {
-    // Buscar Google OAuth token do banco
-    const { data: tokenRow } = await supabase
-      .from('app_settings').select('value').eq('key', 'google_oauth_token').single()
-
-    if (!tokenRow?.value) {
-      // Sem token OAuth — retorna status informativo
-      return new Response(JSON.stringify({
-        ok: false,
-        message: 'Google OAuth não configurado. O Drive está sincronizado manualmente (257 entradas, Mai/25-Jun/26).',
-        cash_flow_count: (await supabase.from('cash_flow').select('*', { count: 'exact', head: true })).count,
-        last_sync: 'manual',
-      }), { headers: cors })
-    }
-
-    const tokenData = JSON.parse(tokenRow.value)
-    const result = await syncDriveToSupabase(tokenData.access_token)
-    await supabase.from('app_settings').upsert({ key: 'last_drive_sync', value: new Date().toISOString() })
+    const accessToken = await getAccessTokenFromRefreshToken()
+    const result = await syncDriveToSupabase(accessToken)
+    await supabase.from('app_settings').upsert({ key: 'last_drive_sync', value: new Date().toISOString() }, { onConflict: 'key' })
 
     return new Response(JSON.stringify({ ok: true, ...result }), { headers: cors })
   } catch (e: any) {
+    if (e.message === 'NOT_CONFIGURED') {
+      return new Response(JSON.stringify({
+        ok: false,
+        message: 'Google OAuth não configurado (google_refresh_token / google_client_id / google_client_secret faltando em app_settings). Rode scripts/setup-google-oauth.ts para configurar.',
+      }), { headers: cors })
+    }
     return new Response(JSON.stringify({ error: String(e.message) }), { status: 500, headers: cors })
   }
 })
