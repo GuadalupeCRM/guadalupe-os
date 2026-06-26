@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { CMV_BY_SKU } from '../constants/business'
-import type { CMVComponent, InventoryMovement, InventoryMovementType, SKUType } from '../types'
+import { CMV_BY_SKU, BARRIL_SKUS, BARRIL_REORDER_POINT_DEFAULT } from '../constants/business'
+import type { CMVComponent, InventoryMovement, InventoryMovementType, SKUType, BarrilSKUType } from '../types'
 
 export const SKUS: SKUType[] = ['mango_sour', 'margarita_lime', 'paloma_grapefruit']
 
@@ -69,7 +69,7 @@ export function useInventory() {
 // MOVIMENTOS — histórico com total acumulado
 // ============================================================
 export interface MovementFilters {
-  sku?: SKUType
+  sku?: SKUType | BarrilSKUType
   type?: InventoryMovementType
   startDate?: string
   endDate?: string
@@ -116,7 +116,7 @@ export function useInventoryMovements(filters: MovementFilters = {}) {
 // ============================================================
 export interface CreateMovementInput {
   date: string
-  sku: SKUType
+  sku: SKUType | BarrilSKUType
   type: InventoryMovementType
   units: number
   notes?: string
@@ -134,6 +134,8 @@ export function useCreateMovement() {
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
       queryClient.invalidateQueries({ queryKey: ['inventory-movements'] })
       queryClient.invalidateQueries({ queryKey: ['reorder-suggestions'] })
+      queryClient.invalidateQueries({ queryKey: ['barril-inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['barril-reorder-status'] })
     },
   })
 }
@@ -144,7 +146,7 @@ export function useCreateMovement() {
 export function useUpdateReorderPoint() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ sku, reorder_point }: { sku: SKUType; reorder_point: number }) => {
+    mutationFn: async ({ sku, reorder_point }: { sku: SKUType | BarrilSKUType; reorder_point: number }) => {
       const { error } = await supabase
         .from('inventory_settings')
         .upsert({ sku, reorder_point, updated_at: new Date().toISOString() }, { onConflict: 'sku' })
@@ -153,6 +155,8 @@ export function useUpdateReorderPoint() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
       queryClient.invalidateQueries({ queryKey: ['reorder-suggestions'] })
+      queryClient.invalidateQueries({ queryKey: ['barril-inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['barril-reorder-status'] })
     },
   })
 }
@@ -244,6 +248,85 @@ export function useReorderSuggestions() {
           status,
         }
       })
+    },
+  })
+}
+
+// ============================================================
+// BARRIS — SKU completamente independente das latas (30L cada).
+// Sem conversão para latas, sem soma no total de latas.
+// ============================================================
+export interface BarrilInventorySummary {
+  sku: BarrilSKUType
+  currentStock: number
+  reorderPoint: number
+  cmv: number
+  lastUpdated: string | null
+}
+
+export interface BarrilInventoryData {
+  bySku: BarrilInventorySummary[]
+  totalBarris: number
+}
+
+export function useBarrilInventory() {
+  return useQuery({
+    queryKey: ['barril-inventory'],
+    staleTime: 30 * 1000,
+    queryFn: async (): Promise<BarrilInventoryData> => {
+      const [movementsRes, settingsRes, cmvRes] = await Promise.all([
+        supabase.from('inventory_movements').select('*').in('sku', BARRIL_SKUS),
+        supabase.from('inventory_settings').select('*').in('sku', BARRIL_SKUS),
+        supabase.from('cmv_components').select('sku, value').in('sku', BARRIL_SKUS),
+      ])
+      if (movementsRes.error) throw movementsRes.error
+      if (settingsRes.error) throw settingsRes.error
+      if (cmvRes.error) throw cmvRes.error
+
+      const movements = (movementsRes.data ?? []) as InventoryMovement[]
+      const settings = settingsRes.data ?? []
+      const cmvComponents = cmvRes.data ?? []
+
+      const bySku: BarrilInventorySummary[] = BARRIL_SKUS.map((sku) => {
+        const skuMovements = movements.filter((m) => m.sku === sku)
+        const currentStock = skuMovements.reduce(
+          (s, m) => s + (m.type === 'entrada' ? m.units : -m.units),
+          0
+        )
+        const reorderPoint = settings.find((s) => s.sku === sku)?.reorder_point ?? BARRIL_REORDER_POINT_DEFAULT
+        // CMV por barril = soma dos componentes em cmv_components onde sku = <sku>_barril; se não existir, 0
+        const cmv = cmvComponents.filter((c) => c.sku === sku).reduce((s, c) => s + Number(c.value), 0)
+        const lastUpdated = skuMovements.length
+          ? skuMovements.reduce((latest, m) => (m.date > latest ? m.date : latest), skuMovements[0].date)
+          : null
+        return { sku, currentStock, reorderPoint, cmv, lastUpdated }
+      })
+
+      const totalBarris = bySku.reduce((s, b) => s + b.currentStock, 0)
+      return { bySku, totalBarris }
+    },
+  })
+}
+
+export interface BarrilReorderStatus {
+  sku: BarrilSKUType
+  currentStock: number
+  reorderPoint: number
+  status: 'below' | 'ok'
+}
+
+export function useBarrilReorderStatus() {
+  const { data: inventory } = useBarrilInventory()
+  return useQuery({
+    queryKey: ['barril-reorder-status', inventory?.bySku.length],
+    enabled: !!inventory,
+    queryFn: async (): Promise<BarrilReorderStatus[]> => {
+      return (inventory?.bySku ?? []).map((s) => ({
+        sku: s.sku,
+        currentStock: s.currentStock,
+        reorderPoint: s.reorderPoint,
+        status: s.currentStock < s.reorderPoint ? 'below' : 'ok',
+      }))
     },
   })
 }

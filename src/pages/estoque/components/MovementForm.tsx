@@ -3,14 +3,17 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import Modal from '../../../components/ui/Modal'
-import { SKU_LABELS } from '../../../constants/business'
+import { SKU_LABELS, BARRIL_SKUS, BARRIL_SKU_LABELS } from '../../../constants/business'
 import { MOVEMENT_TYPE_LABELS } from '../constants'
 import { useCreateMovement, SKUS } from '../../../hooks/useEstoque'
-import type { SKUType, InventoryMovementType } from '../../../types'
+import type { SKUType, BarrilSKUType, InventoryMovementType } from '../../../types'
 
 const movementSchema = z.object({
   date: z.string().min(1, 'Informe a data'),
-  sku: z.enum(['mango_sour', 'margarita_lime', 'paloma_grapefruit']),
+  sku: z.enum([
+    'mango_sour', 'margarita_lime', 'paloma_grapefruit',
+    'mango_sour_barril', 'margarita_lime_barril', 'paloma_grapefruit_barril',
+  ]),
   type: z.enum(['entrada', 'saida']),
   units: z.coerce.number().positive('Informe uma quantidade maior que zero'),
   notes: z.string().optional(),
@@ -24,10 +27,10 @@ export default function MovementForm({
 }: {
   open: boolean
   onClose: () => void
-  defaultSku?: SKUType
+  defaultSku?: SKUType | BarrilSKUType
   defaultType?: InventoryMovementType
 }) {
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<MovementFormValues>({
+  const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } = useForm<MovementFormValues>({
     resolver: zodResolver(movementSchema),
     defaultValues: {
       date: new Date().toISOString().slice(0, 10),
@@ -39,6 +42,8 @@ export default function MovementForm({
     },
   })
   const createMovement = useCreateMovement()
+  const selectedSku = watch('sku')
+  const isBarril = (BARRIL_SKUS as readonly string[]).includes(selectedSku)
 
   const onSubmit = async (values: MovementFormValues) => {
     try {
@@ -80,12 +85,19 @@ export default function MovementForm({
         <div>
           <label className="block font-sans text-xs font-semibold text-gray-500 mb-1">SKU</label>
           <select {...register('sku')} className="w-full border border-areia-warm rounded-lg px-3 py-2 font-sans text-sm focus:outline-none focus:border-verde-vivid">
-            {SKUS.map((sku) => <option key={sku} value={sku}>{SKU_LABELS[sku]}</option>)}
+            <optgroup label="Latas">
+              {SKUS.map((sku) => <option key={sku} value={sku}>{SKU_LABELS[sku]}</option>)}
+            </optgroup>
+            <optgroup label="Barris (30L)">
+              {BARRIL_SKUS.map((sku) => <option key={sku} value={sku}>{BARRIL_SKU_LABELS[sku]} (Barril)</option>)}
+            </optgroup>
           </select>
         </div>
 
         <div>
-          <label className="block font-sans text-xs font-semibold text-gray-500 mb-1">Unidades (latas)</label>
+          <label className="block font-sans text-xs font-semibold text-gray-500 mb-1">
+            Unidades ({isBarril ? 'barris' : 'latas'})
+          </label>
           <input type="number" {...register('units')} className="w-full border border-areia-warm rounded-lg px-3 py-2 font-sans text-sm focus:outline-none focus:border-verde-vivid" />
           {errors.units && <p className="text-rosa-vivid text-xs font-sans mt-1">{errors.units.message}</p>}
         </div>

@@ -1,15 +1,20 @@
 import { useState } from 'react'
-import { Plus, ArrowDownCircle, ArrowUpCircle, Package, Wallet, RefreshCw } from 'lucide-react'
-import { SKU_LABELS } from '../../../constants/business'
-import { useInventory } from '../../../hooks/useEstoque'
+import { Plus, ArrowDownCircle, ArrowUpCircle, Package, Wallet, RefreshCw, Container } from 'lucide-react'
+import { SKU_LABELS, BARRIL_SKU_LABELS, BARRIL_VOLUME_LITERS } from '../../../constants/business'
+import { useInventory, useBarrilInventory } from '../../../hooks/useEstoque'
 import { formatCurrency, formatNumber, formatDate, caixasFromLatas } from '../../../utils/formatters'
 import MovementForm from '../components/MovementForm'
-import type { SKUInventorySummary } from '../../../hooks/useEstoque'
-import type { SKUType, InventoryMovementType } from '../../../types'
+import type { SKUInventorySummary, BarrilInventorySummary } from '../../../hooks/useEstoque'
+import type { SKUType, BarrilSKUType, InventoryMovementType } from '../../../types'
 
 function stockColor(summary: SKUInventorySummary): string {
   if (summary.currentStock < summary.reorderPoint) return 'text-rosa-vivid'
   if (summary.currentStock < summary.reorderPoint * 2) return 'text-amarelo-vivid'
+  return 'text-verde-vivid'
+}
+
+function barrilStockColor(summary: BarrilInventorySummary): string {
+  if (summary.currentStock < summary.reorderPoint) return 'text-rosa-vivid'
   return 'text-verde-vivid'
 }
 
@@ -56,10 +61,53 @@ function SkuCard({ summary, onMove }: { summary: SKUInventorySummary; onMove: (t
   )
 }
 
+// Barris — SKU independente das latas (30L cada). Sem conversão/soma com o estoque de latas.
+function BarrilSkuCard({ summary, onMove }: { summary: BarrilInventorySummary; onMove: (type: InventoryMovementType) => void }) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col">
+      <p className="font-serif text-xl text-gray-900">{BARRIL_SKU_LABELS[summary.sku]}</p>
+      <p className={`font-serif text-5xl mt-2 ${barrilStockColor(summary)}`}>{formatNumber(summary.currentStock)}</p>
+      <p className="font-sans text-xs text-gray-400 mt-1">barris em estoque</p>
+      <p className="font-sans text-xs text-gray-400">{BARRIL_VOLUME_LITERS}L por barril</p>
+
+      <div className="mt-4 space-y-1.5 font-sans text-sm">
+        <div className="flex items-center justify-between">
+          <span className="text-gray-400">Ponto de reposição</span>
+          <span className="font-semibold text-gray-700">{formatNumber(summary.reorderPoint)} barris</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-gray-400">CMV por barril</span>
+          <span className="font-semibold text-gray-700">{summary.cmv > 0 ? formatCurrency(summary.cmv) : '—'}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-gray-400">Última atualização</span>
+          <span className="font-semibold text-gray-700">{summary.lastUpdated ? formatDate(summary.lastUpdated) : '—'}</span>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mt-4 pt-4 border-t border-areia-warm">
+        <button
+          onClick={() => onMove('saida')}
+          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-sans font-semibold text-xs border border-areia-warm text-gray-600 hover:bg-areia"
+        >
+          <ArrowDownCircle size={14} /> Dar baixa
+        </button>
+        <button
+          onClick={() => onMove('entrada')}
+          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-sans font-semibold text-xs bg-verde-vivid text-white hover:bg-verde-mid"
+        >
+          <ArrowUpCircle size={14} /> Entrada
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function InventarioTab() {
   const { data, isLoading } = useInventory()
+  const { data: barrilData, isLoading: barrilLoading } = useBarrilInventory()
   const [showForm, setShowForm] = useState(false)
-  const [quickMove, setQuickMove] = useState<{ sku: SKUType; type: InventoryMovementType } | null>(null)
+  const [quickMove, setQuickMove] = useState<{ sku: SKUType | BarrilSKUType; type: InventoryMovementType } | null>(null)
 
   if (isLoading || !data) {
     return <p className="font-sans text-sm text-gray-400">Carregando inventário...</p>
@@ -82,16 +130,43 @@ export default function InventarioTab() {
         ))}
       </div>
 
-      {/* Resumo */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Barris — seção completamente separada das latas */}
+      <div>
+        <h3 className="font-serif text-lg text-gray-900 mb-3 flex items-center gap-2">
+          <Container size={18} className="text-gray-400" /> Barris
+        </h3>
+        {barrilLoading || !barrilData ? (
+          <p className="font-sans text-sm text-gray-400">Carregando barris...</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {barrilData.bySku.map((summary) => (
+              <BarrilSkuCard key={summary.sku} summary={summary} onMove={(type) => setQuickMove({ sku: summary.sku, type })} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Resumo — Latas e Barris nunca somados */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-areia border border-gray-200 rounded-xl p-5 flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-verde-pale flex items-center justify-center flex-shrink-0">
             <Package size={18} className="text-verde-vivid" />
           </div>
           <div>
-            <p className="font-sans text-xs text-gray-400 uppercase tracking-wider font-semibold">Total em estoque</p>
+            <p className="font-sans text-xs text-gray-400 uppercase tracking-wider font-semibold">Latas</p>
             <p className="font-serif text-2xl text-gray-900">
               {formatNumber(caixasFromLatas(data.totalCans))} cx / {formatNumber(data.totalCans)} latas
+            </p>
+          </div>
+        </div>
+        <div className="bg-areia border border-gray-200 rounded-xl p-5 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-verde-pale flex items-center justify-center flex-shrink-0">
+            <Container size={18} className="text-verde-vivid" />
+          </div>
+          <div>
+            <p className="font-sans text-xs text-gray-400 uppercase tracking-wider font-semibold">Barris</p>
+            <p className="font-serif text-2xl text-gray-900">
+              {formatNumber(barrilData?.totalBarris ?? 0)} unidades
             </p>
           </div>
         </div>

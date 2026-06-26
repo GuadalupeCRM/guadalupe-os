@@ -6,6 +6,9 @@ export type UserRole = 'admin' | 'comercial' | 'marketing' | 'eventos' | 'financ
 export type CanaisType = 'evento' | 'on_trade' | 'distribuidor' | 'dtc_site' | 'dtc_ml' | 'dtc_amazon'
 export type SKUType = 'mango_sour' | 'margarita_lime' | 'paloma_grapefruit'
 
+// Barris — SKU independente das latas (sem conversão/soma entre os dois), usado só no Estoque.
+export type BarrilSKUType = 'mango_sour_barril' | 'margarita_lime_barril' | 'paloma_grapefruit_barril'
+
 export type CRMStage =
   | 'lead_novo' | 'contato_feito' | 'qualificado' | 'proposta_enviada'
   | 'negociacao' | 'primeiro_pedido' | 'ativo' | 'em_risco' | 'inativo' | 'perdido'
@@ -229,7 +232,7 @@ export type InventoryMovementType = 'entrada' | 'saida'
 export interface InventoryMovement {
   id: string
   date: string
-  sku: SKUType
+  sku: SKUType | BarrilSKUType
   type: InventoryMovementType
   units: number
   notes?: string
@@ -238,14 +241,14 @@ export interface InventoryMovement {
 }
 
 export interface InventorySetting {
-  sku: SKUType
+  sku: SKUType | BarrilSKUType
   reorder_point: number
   updated_at: string
 }
 
 export interface CMVComponent {
   id: string
-  sku: SKUType
+  sku: SKUType | BarrilSKUType
   label: string
   value: number
   sort_order: number

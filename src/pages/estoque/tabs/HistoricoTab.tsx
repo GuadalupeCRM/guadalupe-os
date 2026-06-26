@@ -1,8 +1,13 @@
 import { useState } from 'react'
-import { SKU_LABELS } from '../../../constants/business'
+import { SKU_LABELS, BARRIL_SKU_LABELS, BARRIL_SKUS } from '../../../constants/business'
 import { MOVEMENT_TYPE_LABELS } from '../constants'
 import { useInventoryMovements, SKUS } from '../../../hooks/useEstoque'
 import { formatNumber, formatDate, caixasFromLatas } from '../../../utils/formatters'
+import type { SKUType, BarrilSKUType } from '../../../types'
+
+function isBarrilSku(sku: SKUType | BarrilSKUType): sku is BarrilSKUType {
+  return (BARRIL_SKUS as readonly string[]).includes(sku)
+}
 
 export default function HistoricoTab() {
   const [sku, setSku] = useState('')
@@ -11,7 +16,7 @@ export default function HistoricoTab() {
   const [endDate, setEndDate] = useState('')
 
   const { data: movements, isLoading } = useInventoryMovements({
-    sku: sku ? (sku as (typeof SKUS)[number]) : undefined,
+    sku: sku ? (sku as SKUType | BarrilSKUType) : undefined,
     type: type ? (type as 'entrada' | 'saida') : undefined,
     startDate: startDate || undefined,
     endDate: endDate || undefined,
@@ -25,7 +30,12 @@ export default function HistoricoTab() {
           <label className="block font-sans text-xs font-semibold text-gray-500 mb-1">SKU</label>
           <select value={sku} onChange={(e) => setSku(e.target.value)} className="border border-areia-warm rounded-lg px-3 py-2 font-sans text-sm focus:outline-none focus:border-verde-vivid">
             <option value="">Todos</option>
-            {SKUS.map((s) => <option key={s} value={s}>{SKU_LABELS[s]}</option>)}
+            <optgroup label="Latas">
+              {SKUS.map((s) => <option key={s} value={s}>{SKU_LABELS[s]}</option>)}
+            </optgroup>
+            <optgroup label="Barris">
+              {BARRIL_SKUS.map((s) => <option key={s} value={s}>{BARRIL_SKU_LABELS[s]} (Barril)</option>)}
+            </optgroup>
           </select>
         </div>
         <div>
@@ -78,25 +88,39 @@ export default function HistoricoTab() {
                 </tr>
               </thead>
               <tbody>
-                {movements.map((m) => (
+                {movements.map((m) => {
+                  const barril = isBarrilSku(m.sku)
+                  return (
                   <tr key={m.id} className="border-b border-gray-50 last:border-0">
                     <td className="px-5 py-2.5 text-gray-500">{formatDate(m.date)}</td>
-                    <td className="px-5 py-2.5 text-gray-800 font-semibold">{SKU_LABELS[m.sku] ?? m.sku}</td>
+                    <td className="px-5 py-2.5 text-gray-800 font-semibold">
+                      {barril ? BARRIL_SKU_LABELS[m.sku] : SKU_LABELS[m.sku] ?? m.sku}
+                      {barril && (
+                        <span className="ml-2 font-sans text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-areia-warm text-gray-600">
+                          BARRIL
+                        </span>
+                      )}
+                    </td>
                     <td className="px-5 py-2.5">
                       <span className={`font-sans text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${m.type === 'entrada' ? 'bg-verde-pale text-verde-vivid' : 'bg-rosa-pale text-rosa-vivid'}`}>
                         {MOVEMENT_TYPE_LABELS[m.type]}
                       </span>
                     </td>
                     <td className={`px-5 py-2.5 text-right font-semibold ${m.type === 'entrada' ? 'text-verde-vivid' : 'text-rosa-vivid'}`}>
-                      {m.type === 'entrada' ? '+' : '-'}{formatNumber(m.units)} latas ({formatNumber(caixasFromLatas(m.units))} cx)
+                      {barril
+                        ? `${m.type === 'entrada' ? '+' : '-'}${formatNumber(m.units)} barris`
+                        : `${m.type === 'entrada' ? '+' : '-'}${formatNumber(m.units)} latas (${formatNumber(caixasFromLatas(m.units))} cx)`}
                     </td>
                     <td className="px-5 py-2.5 text-right text-gray-700 font-semibold">
-                      {formatNumber(m.running_total)} latas ({formatNumber(caixasFromLatas(m.running_total))} cx)
+                      {barril
+                        ? `${formatNumber(m.running_total)} barris`
+                        : `${formatNumber(m.running_total)} latas (${formatNumber(caixasFromLatas(m.running_total))} cx)`}
                     </td>
                     <td className="px-5 py-2.5 text-gray-500">{m.notes ?? '—'}</td>
                     <td className="px-5 py-2.5 text-gray-400">{m.bling_nf_id ?? '—'}</td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

@@ -33,6 +33,18 @@ export const SKU_LABELS: Record<string, string> = {
   paloma_grapefruit: 'Paloma Grapefruit',
 }
 
+// Barris — SKU independente das latas (30L cada). Sem conversão/soma com o estoque de latas.
+export const BARRIL_SKUS = ['mango_sour_barril', 'margarita_lime_barril', 'paloma_grapefruit_barril'] as const
+
+export const BARRIL_SKU_LABELS: Record<string, string> = {
+  mango_sour_barril: 'Mango Sour',
+  margarita_lime_barril: 'Margarita Lime',
+  paloma_grapefruit_barril: 'Paloma Grapefruit',
+}
+
+export const BARRIL_REORDER_POINT_DEFAULT = 2
+export const BARRIL_VOLUME_LITERS = 30
+
 export const CHANNEL_LABELS: Record<string, string> = {
   evento: 'Evento',
   on_trade: 'On-Trade',
